@@ -35,6 +35,29 @@ connection.once('open', () => {
   console.log("MongoDB is connected");
 });
 
+async function verifyCaptcha(token) {
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY; // Your reCAPTCHA secret key
+
+  try {
+    const response = await axios.post(
+      `https://www.google.com/recaptcha/api/siteverify`,
+      {},
+      {
+        params: {
+          secret: secretKey,
+          response: token
+        }
+      }
+    );
+
+    // Check if the reCAPTCHA verification was successful
+    return response.data.success;
+  } catch (error) {
+    console.error('Error verifying captcha:', error);
+    return false;
+  }
+}
+
 // Step 1: Redirect to HubSpot's OAuth 2.0 server
 app.get('/auth', (req, res) => {
   const authorizationUri = `${AUTHORIZATION_URL}?${querystring.stringify({
@@ -131,95 +154,110 @@ async function getValidAccessToken() {
 
 // POST route to handle form submission and create or update a HubSpot contact
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-    const { firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
-  
-    if (!firstName || !lastName || !email || !phoneNumber || !program || !time || !classDate || !postal) {
-      return res.status(400).send({ message: 'Please fill out all the fields.' });
+  const { firstName, lastName, email, phoneNumber, program, time, classDate, postal, recaptchaToken } = req.body;
+
+  // Verify reCAPTCHA token
+  try {
+    const recaptchaResponse = await axios.post(
+      `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`
+    );
+    
+    if (!recaptchaResponse.data.success) {
+      return res.status(400).send({ message: 'reCAPTCHA validation failed.' });
     }
-  
-    try {
-      // Fetch a valid access token
-      const accessToken = await getValidAccessToken();
-      console.log('Using access token:', accessToken);
-  
-      // Convert classDate (formatted as MM/DD/YYYY) to timestamp at midnight UTC
-      const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
-  
-      // HubSpot API URL for searching a contact by email
-      const searchUrl = `https://api.hubapi.com/crm/v3/objects/contacts/search`;
-      const searchData = {
-        filterGroups: [
-          {
-            filters: [{ propertyName: 'email', operator: 'EQ', value: email }],
-          },
-        ],
+  } catch (error) {
+    console.error('Error validating reCAPTCHA:', error.message);
+    return res.status(500).send({ message: 'Error validating reCAPTCHA.' });
+  }
+
+  // Ensure all form fields are filled
+  if (!firstName || !lastName || !email || !phoneNumber || !program || !time || !classDate || !postal) {
+    return res.status(400).send({ message: 'Please fill out all the fields.' });
+  }
+
+  try {
+    // Fetch a valid access token
+    const accessToken = await getValidAccessToken();
+    console.log('Using access token:', accessToken);
+
+    // Convert classDate (formatted as MM/DD/YYYY) to timestamp at midnight UTC
+    const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
+
+    // HubSpot API URL for searching a contact by email
+    const searchUrl = `https://api.hubapi.com/crm/v3/objects/contacts/search`;
+    const searchData = {
+      filterGroups: [
+        {
+          filters: [{ propertyName: 'email', operator: 'EQ', value: email }],
+        },
+      ],
+    };
+
+    // Search for the contact by email
+    const searchResponse = await axios.post(searchUrl, searchData, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const contactExists = searchResponse.data.total > 0;
+
+    if (contactExists) {
+      // If contact exists, update the existing contact
+      const existingContactId = searchResponse.data.results[0].id;
+      const updateUrl = `https://api.hubapi.com/crm/v3/objects/contacts/${existingContactId}`;
+      const contactUpdateData = {
+        properties: {
+          firstname: firstName,
+          lastname: lastName,
+          phone: phoneNumber,
+          zip: postal,
+          choose_a_program: program,
+          intro_to_ai_program_date: formattedClassDate, // Date in timestamp (milliseconds) format at midnight UTC
+          program_session: time,
+        },
       };
-  
-      // Search for the contact by email
-      const searchResponse = await axios.post(searchUrl, searchData, {
+
+      // Update the contact
+      const updateResponse = await axios.patch(updateUrl, contactUpdateData, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
       });
-  
-      const contactExists = searchResponse.data.total > 0;
-      
-      if (contactExists) {
-        // If contact exists, update the existing contact
-        const existingContactId = searchResponse.data.results[0].id;
-        const updateUrl = `https://api.hubapi.com/crm/v3/objects/contacts/${existingContactId}`;
-        const contactUpdateData = {
-          properties: {
-            firstname: firstName,
-            lastname: lastName,
-            phone: phoneNumber,
-            zip: postal,
-            choose_a_program: program,
-            intro_to_ai_program_date: formattedClassDate, // Date in timestamp (milliseconds) format at midnight UTC
-            program_session: time,
-          },
-        };
-  
-        // Update the contact
-        const updateResponse = await axios.patch(updateUrl, contactUpdateData, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-  
-        res.status(200).send({ message: 'Contact updated successfully!', data: updateResponse.data });
-      } else {
-        // If contact doesn't exist, create a new contact
-        const createUrl = 'https://api.hubapi.com/crm/v3/objects/contacts';
-        const contactData = {
-          properties: {
-            firstname: firstName,
-            lastname: lastName,
-            email: email,
-            phone: phoneNumber,
-            zip: postal,
-            choose_a_program: program,
-            intro_to_ai_program_date: formattedClassDate, // Date in timestamp (milliseconds) format at midnight UTC
-            program_session: time,
-          },
-        };
-  
-        const createResponse = await axios.post(createUrl, contactData, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-  
-        res.status(200).send({ message: 'Contact created successfully!', data: createResponse.data });
-      }
-    } catch (error) {
-      console.error('Error creating or updating contact:', error.response ? error.response.data : error.message);
-      res.status(500).send({ message: 'Error creating or updating contact in HubSpot.' });
+
+      res.status(200).send({ message: 'Contact updated successfully!', data: updateResponse.data });
+    } else {
+      // If contact doesn't exist, create a new contact
+      const createUrl = 'https://api.hubapi.com/crm/v3/objects/contacts';
+      const contactData = {
+        properties: {
+          firstname: firstName,
+          lastname: lastName,
+          email: email,
+          phone: phoneNumber,
+          zip: postal,
+          choose_a_program: program,
+          intro_to_ai_program_date: formattedClassDate, // Date in timestamp (milliseconds) format at midnight UTC
+          program_session: time,
+        },
+      };
+
+      const createResponse = await axios.post(createUrl, contactData, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      res.status(200).send({ message: 'Contact created successfully!', data: createResponse.data });
     }
-  });
+  } catch (error) {
+    console.error('Error creating or updating contact:', error.response ? error.response.data : error.message);
+    res.status(500).send({ message: 'Error creating or updating contact in HubSpot.' });
+  }
+});
   
 // Start the server
 const PORT = process.env.PORT || 5000;
