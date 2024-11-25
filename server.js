@@ -37,7 +37,10 @@ connection.once('open', () => {
 
 async function verifyCaptcha(token) {
   const secretKey = process.env.SECRET_KEY; // Your reCAPTCHA secret key
-
+  console.log("Verifying reCAPTCHA with:", {
+    secret: process.env.SECRET_KEY,
+    response: recaptchaToken,
+  });
   try {
     const response = await axios.post(
       `https://www.google.com/recaptcha/api/siteverify`,
