@@ -36,7 +36,7 @@ connection.once('open', () => {
 });
 
 async function verifyCaptcha(token) {
-  const secretKey = process.env.SECRET_KEY; // Your reCAPTCHA secret key
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY; // Your reCAPTCHA secret key
 
   try {
     const response = await axios.post(
@@ -159,7 +159,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
   // Verify reCAPTCHA token
   try {
     const recaptchaResponse = await axios.post(
-      `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.SECRET_KEY}&response=${recaptchaToken}`
+      `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`
     );
     
     if (!recaptchaResponse.data.success) {
