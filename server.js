@@ -3,183 +3,157 @@ const axios = require('axios');
 const querystring = require('querystring');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const multer = require('multer');
-const FormData = require('form-data');
-const fs = require('fs');
 const mongoose = require('mongoose');
 const moment = require('moment');
 require('dotenv').config();
 
-// Import the Token model
-const Token = require('./models/token.models');
-
 const app = express();
-
-// Load environment variables
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5000/auth/callback';
-const AUTHORIZATION_URL = 'https://app.hubspot.com/oauth/authorize';
-const TOKEN_URL = 'https://api.hubapi.com/oauth/v1/token';
-const SCOPES = 'automation content crm.objects.contacts.read crm.objects.contacts.write crm.schemas.contacts.read crm.schemas.contacts.write oauth';
-const SECRET_KEY = process.env.SECRET_KEY; // Ensure this is correctly set in your .env file
-
 app.use(cors());
 app.use(bodyParser.json());
 
-// Connect to MongoDB
-const uri = process.env.ATLAS_URI;
-mongoose.connect(uri, { useUnifiedTopology: true, useNewUrlParser: true });
-const connection = mongoose.connection;
+console.log('SECRET_KEY from .env:', process.env.SECRET_KEY);
 
+// Environment Variables
+const SECRET_KEY = process.env.SECRET_KEY;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const HUBSPOT_API_URL = 'https://api.hubapi.com/crm/v3/objects/contacts';
+
+// MongoDB Connection (Optional)
+mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlParser: true });
+const connection = mongoose.connection;
 connection.once('open', () => {
-  console.log("MongoDB is connected");
+  console.log('MongoDB connected successfully');
 });
 
-// Reusable reCAPTCHA verification function
+// reCAPTCHA Verification
 async function verifyCaptcha(token) {
-  console.log('Verifying reCAPTCHA token:', token); // Debug incoming token
   try {
     const response = await axios.post(
-      `https://www.google.com/recaptcha/api/siteverify`,
+      'https://www.google.com/recaptcha/api/siteverify',
       {},
       {
         params: {
-          secret: SECRET_KEY, // Use the secret key from environment variables
+          secret: SECRET_KEY,
           response: token,
         },
       }
     );
-    console.log('reCAPTCHA verification response:', response.data); // Log Google's response
-    return response.data.success;
+
+    console.log('Google reCAPTCHA API Response:', response.data);
+
+    // Check success and score
+    return response.data.success && response.data.score >= 0.5; // Adjust score threshold if needed
   } catch (error) {
     console.error('Error verifying reCAPTCHA:', error.message);
     return false;
   }
 }
 
-// Step 1: Redirect to HubSpot's OAuth 2.0 server
-app.get('/auth', (req, res) => {
-  const authorizationUri = `${AUTHORIZATION_URL}?${querystring.stringify({
-    client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
-    scope: SCOPES,
-    response_type: 'code',
-  })}`;
-  res.redirect(authorizationUri);
-});
-
-// Step 2: Handle the OAuth 2.0 server response and store tokens
-app.get('/auth/callback', async (req, res) => {
-  const { code } = req.query;
-
-  if (!code) {
-    console.log('No authorization code provided');
-    return res.status(400).send('No authorization code provided');
-  }
+// HubSpot API Integration: Create or Update Contact
+async function createOrUpdateContact(data) {
+  const apiKey = process.env.HUBSPOT_API_KEY; // Ensure your HubSpot API Key is in the .env file
 
   try {
-    const response = await axios.post(TOKEN_URL, querystring.stringify({
-      grant_type: 'authorization_code',
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      redirect_uri: REDIRECT_URI,
-      code,
-    }), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    // Check if contact already exists
+    const searchUrl = `${HUBSPOT_API_URL}/search`;
+    const searchPayload = {
+      filterGroups: [
+        {
+          filters: [{ propertyName: 'email', operator: 'EQ', value: data.email }],
+        },
+      ],
+    };
+
+    const searchResponse = await axios.post(searchUrl, searchPayload, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
     });
 
-    const accessToken = response.data.access_token;
-    const refreshToken = response.data.refresh_token;
-    const expiresAt = Date.now() + response.data.expires_in * 1000;
+    const existingContactId = searchResponse?.data?.results[0]?.id;
 
-    console.log('Access token:', accessToken);
-    console.log('Refresh token:', refreshToken);
-
-    // Attempt to save the token to MongoDB
-    try {
-      const newToken = new Token({ accessToken, refreshToken, expiresAt });
-      await newToken.save();
-      console.log('Tokens saved to MongoDB successfully');
-      res.send('Authentication successful. You can close this window.');
-    } catch (saveError) {
-      console.error('Error saving tokens to MongoDB:', saveError);
-      res.status(500).send('Error saving tokens to MongoDB');
-    }
-  } catch (error) {
-    console.error('Error during OAuth token exchange:', error.response ? error.response.data : error.message);
-    res.status(500).send('Authentication failed');
-  }
-});
-
-// Middleware to refresh tokens if expired
-async function getValidAccessToken() {
-  let token = await Token.findOne();
-  if (!token) {
-    throw new Error('No tokens found in the database');
-  }
-
-  if (Date.now() > token.expiresAt) {
-    console.log('Access token expired, refreshing...');
-
-    try {
-      const response = await axios.post(TOKEN_URL, querystring.stringify({
-        grant_type: 'refresh_token',
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        refresh_token: token.refreshToken,
-      }), {
+    if (existingContactId) {
+      // Update existing contact
+      const updateUrl = `${HUBSPOT_API_URL}/${existingContactId}`;
+      const updateResponse = await axios.patch(updateUrl, { properties: data }, {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
         },
       });
-
-      token.accessToken = response.data.access_token;
-      token.refreshToken = response.data.refresh_token || token.refreshToken;
-      token.expiresAt = Date.now() + response.data.expires_in * 1000;
-
-      await token.save();
-      return token.accessToken;
-    } catch (error) {
-      console.error('Error refreshing access token:', error.response ? error.response.data : error.message);
-      throw new Error('Failed to refresh access token');
+      console.log('Contact updated successfully:', updateResponse.data);
+      return updateResponse.data;
+    } else {
+      // Create a new contact
+      const createResponse = await axios.post(
+        HUBSPOT_API_URL,
+        { properties: data },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log('Contact created successfully:', createResponse.data);
+      return createResponse.data;
     }
+  } catch (error) {
+    console.error('Error in HubSpot API:', error.response?.data || error.message);
+    throw new Error('Failed to create or update contact in HubSpot');
   }
-
-  return token.accessToken;
 }
 
-// POST route to handle form submission and create or update a HubSpot contact
+// POST Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  const { firstName, lastName, email, phoneNumber, program, time, classDate, postal, recaptchaToken } = req.body;
+  console.log('Request Body:', req.body);
 
-  // Verify reCAPTCHA token
+  const { recaptchaToken, firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
+
+  // Validate reCAPTCHA
+  if (!recaptchaToken) {
+    console.error('Missing reCAPTCHA token');
+    return res.status(400).send({ message: 'Missing reCAPTCHA token' });
+  }
+
   const captchaValid = await verifyCaptcha(recaptchaToken);
   if (!captchaValid) {
+    console.error('Invalid reCAPTCHA token');
     return res.status(400).send({ message: 'Invalid reCAPTCHA token.' });
   }
 
-  // Ensure all form fields are filled
+  // Validate Required Fields
   if (!firstName || !lastName || !email || !phoneNumber || !program || !time || !classDate || !postal) {
-    return res.status(400).send({ message: 'Please fill out all the fields.' });
+    console.error('Missing required fields');
+    return res.status(400).send({ message: 'Please fill out all required fields.' });
   }
 
+  // Prepare HubSpot Data
+  const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
+  const hubSpotData = {
+    firstname: firstName,
+    lastname: lastName,
+    email,
+    phone: phoneNumber,
+    program,
+    program_session: time,
+    intro_to_ai_program_date: formattedClassDate,
+    zip: postal,
+  };
+
   try {
-    const accessToken = await getValidAccessToken();
-    console.log('Using access token:', accessToken);
-
-    const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
-
-    // HubSpot logic omitted for brevity
-    res.status(200).send({ message: 'Form processed successfully!' });
+    const hubSpotResponse = await createOrUpdateContact(hubSpotData);
+    res.status(200).send({ message: 'Form submitted successfully!', hubSpotResponse });
   } catch (error) {
-    console.error('Error processing form:', error.message);
-    res.status(500).send({ message: 'Error processing form submission.' });
+    console.error('Error handling form submission:', error.message);
+    res.status(500).send({ message: 'Server error' });
   }
 });
 
-// Start the server
+// Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
