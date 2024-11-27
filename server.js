@@ -1,32 +1,64 @@
 const express = require('express');
 const axios = require('axios');
-const querystring = require('querystring');
 const bodyParser = require('body-parser');
-const cors = require('cors');
 const mongoose = require('mongoose');
 const moment = require('moment');
 require('dotenv').config();
 
+const Token = require('./models/token.models');
+
 const app = express();
-app.use(cors());
 app.use(bodyParser.json());
 
-console.log('SECRET_KEY from .env:', process.env.SECRET_KEY);
-
 // Environment Variables
-const SECRET_KEY = process.env.SECRET_KEY;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const TOKEN_URL = 'https://api.hubapi.com/oauth/v1/token';
 const HUBSPOT_API_URL = 'https://api.hubapi.com/crm/v3/objects/contacts';
+const SECRET_KEY = process.env.SECRET_KEY;
 
-// MongoDB Connection (Optional)
+// MongoDB Connection
 mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlParser: true });
-const connection = mongoose.connection;
-connection.once('open', () => {
-  console.log('MongoDB connected successfully');
-});
+mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
 
-// reCAPTCHA Verification
+// Get Valid Access Token
+async function getValidAccessToken() {
+  const token = await Token.findOne();
+  if (!token) throw new Error('No tokens found in the database');
+
+  if (Date.now() > token.expiresAt) {
+    console.log('Access token expired, refreshing...');
+
+    try {
+      const response = await axios.post(
+        TOKEN_URL,
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+          refresh_token: token.refreshToken,
+        }),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      token.accessToken = response.data.access_token;
+      token.refreshToken = response.data.refresh_token || token.refreshToken;
+      token.expiresAt = Date.now() + response.data.expires_in * 1000;
+      await token.save();
+
+      console.log('Access token refreshed successfully:', token.accessToken);
+      return token.accessToken;
+    } catch (error) {
+      console.error('Error refreshing access token:', error.response?.data || error.message);
+      throw new Error('Failed to refresh access token');
+    }
+  }
+
+  console.log('Access token is still valid:', token.accessToken);
+  return token.accessToken;
+}
+
+// Verify reCAPTCHA
 async function verifyCaptcha(token) {
   try {
     const response = await axios.post(
@@ -40,77 +72,19 @@ async function verifyCaptcha(token) {
       }
     );
 
-    console.log('Google reCAPTCHA API Response:', response.data);
-
-    // Check success and score
-    return response.data.success && response.data.score >= 0.5; // Adjust score threshold if needed
+    console.log('reCAPTCHA response:', response.data);
+    return response.data.success && response.data.score >= 0.5;
   } catch (error) {
-    console.error('Error verifying reCAPTCHA:', error.message);
+    console.error('Error validating reCAPTCHA:', error.response?.data || error.message);
     return false;
   }
 }
 
-// HubSpot API Integration: Create or Update Contact
-async function createOrUpdateContact(data) {
-  const apiKey = process.env.HUBSPOT_API_KEY; // Ensure your HubSpot API Key is in the .env file
-
-  try {
-    // Check if contact already exists
-    const searchUrl = `${HUBSPOT_API_URL}/search`;
-    const searchPayload = {
-      filterGroups: [
-        {
-          filters: [{ propertyName: 'email', operator: 'EQ', value: data.email }],
-        },
-      ],
-    };
-
-    const searchResponse = await axios.post(searchUrl, searchPayload, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const existingContactId = searchResponse?.data?.results[0]?.id;
-
-    if (existingContactId) {
-      // Update existing contact
-      const updateUrl = `${HUBSPOT_API_URL}/${existingContactId}`;
-      const updateResponse = await axios.patch(updateUrl, { properties: data }, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      console.log('Contact updated successfully:', updateResponse.data);
-      return updateResponse.data;
-    } else {
-      // Create a new contact
-      const createResponse = await axios.post(
-        HUBSPOT_API_URL,
-        { properties: data },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      console.log('Contact created successfully:', createResponse.data);
-      return createResponse.data;
-    }
-  } catch (error) {
-    console.error('Error in HubSpot API:', error.response?.data || error.message);
-    throw new Error('Failed to create or update contact in HubSpot');
-  }
-}
-
-// POST Route: Handle Form Submission
+// Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  console.log('Request Body:', req.body);
-
   const { recaptchaToken, firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
+
+  console.log('Received form data:', req.body);
 
   // Validate reCAPTCHA
   if (!recaptchaToken) {
@@ -118,42 +92,76 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     return res.status(400).send({ message: 'Missing reCAPTCHA token' });
   }
 
-  const captchaValid = await verifyCaptcha(recaptchaToken);
-  if (!captchaValid) {
-    console.error('Invalid reCAPTCHA token');
-    return res.status(400).send({ message: 'Invalid reCAPTCHA token.' });
-  }
-
-  // Validate Required Fields
-  if (!firstName || !lastName || !email || !phoneNumber || !program || !time || !classDate || !postal) {
-    console.error('Missing required fields');
-    return res.status(400).send({ message: 'Please fill out all required fields.' });
-  }
-
-  // Prepare HubSpot Data
-  const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
-  const hubSpotData = {
-    firstname: firstName,
-    lastname: lastName,
-    email,
-    phone: phoneNumber,
-    program,
-    program_session: time,
-    intro_to_ai_program_date: formattedClassDate,
-    zip: postal,
-  };
-
   try {
-    const hubSpotResponse = await createOrUpdateContact(hubSpotData);
-    res.status(200).send({ message: 'Form submitted successfully!', hubSpotResponse });
+    const captchaValid = await verifyCaptcha(recaptchaToken);
+    if (!captchaValid) {
+      console.error('Invalid reCAPTCHA token');
+      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+    }
+
+    console.log('reCAPTCHA validation successful');
+
+    const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
+    const hubSpotData = {
+      firstname: firstName,
+      lastname: lastName,
+      email,
+      phone: phoneNumber,
+      program,
+      program_session: time,
+      intro_to_ai_program_date: formattedClassDate,
+      zip: postal,
+    };
+
+    console.log('Formatted data for HubSpot:', hubSpotData);
+
+    const accessToken = await getValidAccessToken();
+    console.log('Using access token for HubSpot:', accessToken);
+
+    // Check if the contact exists in HubSpot
+    const searchResponse = await axios.post(
+      `${HUBSPOT_API_URL}/search`,
+      {
+        filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: email }] }],
+      },
+      {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      }
+    );
+
+    const existingContact = searchResponse.data.results[0];
+    if (existingContact) {
+      console.log('Contact exists, updating:', existingContact);
+      const updateResponse = await axios.patch(
+        `${HUBSPOT_API_URL}/${existingContact.id}`,
+        { properties: hubSpotData },
+        {
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        }
+      );
+      console.log('Contact updated successfully:', updateResponse.data);
+      return res.status(200).send({ message: 'Contact updated successfully', data: updateResponse.data });
+    }
+
+    // Create new contact
+    console.log('Contact not found, creating new contact...');
+    const createResponse = await axios.post(
+      HUBSPOT_API_URL,
+      { properties: hubSpotData },
+      {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      }
+    );
+
+    console.log('Contact created successfully:', createResponse.data);
+    res.status(200).send({ message: 'Contact created successfully', data: createResponse.data });
   } catch (error) {
-    console.error('Error handling form submission:', error.message);
-    res.status(500).send({ message: 'Server error' });
+    console.error('Error during HubSpot integration:', error.response?.data || error.message);
+    res.status(500).send({ message: 'Server error during HubSpot operation', error: error.response?.data || error.message });
   }
 });
+
 
 // Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
