@@ -144,6 +144,83 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
   }
 });
 
+app.patch('/api/update-contact', async (req, res) => {
+  const { email, updatedFields } = req.body;
+
+  if (!email || !updatedFields) {
+    return res.status(400).send({
+      message: 'Email and updatedFields are required',
+    });
+  }
+
+  try {
+    console.log(`Updating contact for email: ${email}`);
+
+    // Get a valid access token
+    const accessToken = await getValidAccessToken();
+
+    // Search for the contact
+    console.log('Searching for contact...');
+    const searchResponse = await axios.post(
+      `${HUBSPOT_API_URL}/search`,
+      {
+        filterGroups: [
+          {
+            filters: [
+              {
+                propertyName: 'email',
+                operator: 'EQ',
+                value: email,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const existingContact = searchResponse.data.results[0];
+    if (!existingContact) {
+      return res.status(404).send({
+        message: 'Contact not found. Cannot update.',
+      });
+    }
+
+    console.log(`Contact found, updating contact with ID: ${existingContact.id}`);
+
+    // Update the contact
+    const updateResponse = await axios.patch(
+      `${HUBSPOT_API_URL}/${existingContact.id}`,
+      { properties: updatedFields },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    console.log('Contact updated successfully:', updateResponse.data);
+    res.status(200).send({
+      message: 'Contact updated successfully',
+      data: updateResponse.data,
+    });
+  } catch (error) {
+    console.error('Error during HubSpot operation:', error.response?.data || error.message);
+    res.status(500).send({
+      message: 'Error during HubSpot operation',
+      error: error.response?.data || error.message,
+    });
+  }
+});
+
+// Other Routes and Middleware (e.g., Authentication, Token Refresh)
+// Include getValidAccessToken function and other utility functions here
 
 // Start Server
 const PORT = process.env.PORT || 5000;
