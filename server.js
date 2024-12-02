@@ -3,19 +3,11 @@ const axios = require('axios');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const moment = require('moment');
-const cors = require('cors');
 require('dotenv').config();
 
 const Token = require('./models/token.models');
 
 const app = express();
-
-const corsOptions = {
-  origin: 'https://app.kableacademy.com/',
-  credentials: true, // access-control-allow-credentials:true
-  optionSuccessStatus: 200,
-};
-app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 // Environment Variables
@@ -31,14 +23,13 @@ const SECRET_KEY = process.env.SECRET_KEY;
 mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlParser: true });
 mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
 
-// Get Valid Access Token
+// Get a Valid Access Token
 async function getValidAccessToken() {
   const token = await Token.findOne();
   if (!token) throw new Error('No tokens found in the database');
 
   if (Date.now() > token.expiresAt) {
     console.log('Access token expired, refreshing...');
-
     try {
       const response = await axios.post(
         TOKEN_URL,
@@ -68,48 +59,12 @@ async function getValidAccessToken() {
   return token.accessToken;
 }
 
-// Verify reCAPTCHA
-async function verifyCaptcha(token) {
-  try {
-    const response = await axios.post(
-      'https://www.google.com/recaptcha/api/siteverify',
-      {},
-      {
-        params: {
-          secret: SECRET_KEY,
-          response: token,
-        },
-      }
-    );
-
-    console.log('reCAPTCHA response:', response.data);
-    return response.data.success && response.data.score >= 0.5;
-  } catch (error) {
-    console.error('Error validating reCAPTCHA:', error.response?.data || error.message);
-    return false;
-  }
-}
-
 // Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  const { recaptchaToken, firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
-
-  console.log('Received form data:', req.body);
-
-  // Validate reCAPTCHA
-  if (!recaptchaToken) {
-    console.error('Missing reCAPTCHA token');
-    return res.status(400).send({ message: 'Missing reCAPTCHA token' });
-  }
+  const { firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
 
   try {
-    const captchaValid = await verifyCaptcha(recaptchaToken);
-    if (!captchaValid) {
-      console.error('Invalid reCAPTCHA token');
-      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
-    }
-
-    console.log('reCAPTCHA validation successful');
+    console.log('Received form data:', req.body);
 
     const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
     const hubSpotData = {
@@ -126,7 +81,6 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     console.log('Formatted data for HubSpot:', hubSpotData);
 
     const accessToken = await getValidAccessToken();
-    console.log('Using access token for HubSpot:', accessToken);
 
     // Check if the contact exists in HubSpot
     const searchResponse = await axios.post(
@@ -139,12 +93,9 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       }
     );
 
-    console.log('Search Response:', searchResponse.data);
-
     const existingContact = searchResponse.data.results[0];
     if (existingContact) {
       console.log('Contact exists, updating:', existingContact);
-
       const updateResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${existingContact.id}`,
         { properties: hubSpotData },
@@ -152,12 +103,11 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         }
       );
-
       console.log('Contact updated successfully:', updateResponse.data);
       return res.status(200).send({ message: 'Contact updated successfully', data: updateResponse.data });
     }
 
-    // Create new contact
+    // Create a new contact
     console.log('Contact not found, creating new contact...');
     const createResponse = await axios.post(
       HUBSPOT_API_URL,
