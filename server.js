@@ -60,87 +60,76 @@ async function getValidAccessToken() {
 }
 
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  const { firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
+  const { recaptchaToken, firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
+
+  console.log('Received form data:', req.body); // Log received data
 
   try {
-    console.log('Received form data:', req.body);
+    const captchaValid = await verifyCaptcha(recaptchaToken);
+    console.log('reCAPTCHA validation:', captchaValid);
 
-    // Format Date for HubSpot
+    if (!captchaValid) {
+      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+    }
+
     const formattedClassDate = moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf();
     const hubSpotData = {
       firstname: firstName,
       lastname: lastName,
+      email,
       phone: phoneNumber,
       program,
       program_session: time,
       intro_to_ai_program_date: formattedClassDate,
       zip: postal,
     };
+    console.log('Prepared HubSpot data:', hubSpotData);
 
-    console.log('Formatted data for HubSpot:', hubSpotData);
-
-    // Get a valid access token
     const accessToken = await getValidAccessToken();
+    console.log('Access token retrieved:', accessToken);
 
-    // Search for the contact in HubSpot
-    console.log('Searching for contact...');
     const searchResponse = await axios.post(
       `${HUBSPOT_API_URL}/search`,
       {
-        filterGroups: [
-          {
-            filters: [
-              {
-                propertyName: 'email',
-                operator: 'EQ',
-                value: email,
-              },
-            ],
-          },
-        ],
+        filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: email }] }],
       },
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       }
     );
 
+    console.log('Search response from HubSpot:', searchResponse.data);
+
     const existingContact = searchResponse.data.results[0];
     if (existingContact) {
-      console.log(`Contact found, updating contact with ID: ${existingContact.id}`);
+      console.log('Updating existing contact:', existingContact);
 
-      // Update the contact
       const updateResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${existingContact.id}`,
         { properties: hubSpotData },
         {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         }
       );
 
-      console.log('Contact updated successfully:', updateResponse.data);
-      return res.status(200).send({
-        message: 'Contact updated successfully',
-        data: updateResponse.data,
-      });
+      console.log('Update response from HubSpot:', updateResponse.data);
+      return res.status(200).send({ message: 'Contact updated successfully', data: updateResponse.data });
     }
 
-    // If no contact is found, respond with an error
-    console.log('Contact not found');
-    res.status(404).send({
-      message: 'Contact not found. Cannot update.',
-    });
+    console.log('Creating a new contact...');
+    const createResponse = await axios.post(
+      HUBSPOT_API_URL,
+      { properties: hubSpotData },
+      {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      }
+    );
+
+    console.log('Create response from HubSpot:', createResponse.data);
+    res.status(200).send({ message: 'Contact created successfully', data: createResponse.data });
   } catch (error) {
     console.error('Error during HubSpot operation:', error.response?.data || error.message);
-    res.status(500).send({
-      message: 'Error during HubSpot operation',
-      error: error.response?.data || error.message,
-    });
+    res.status(500).send({ message: 'Server error', error: error.response?.data || error.message });
   }
 });
 
