@@ -10,7 +10,13 @@ const Token = require('./models/token.models');
 
 const app = express();
 
-app.use(cors())
+const cors = require('cors');
+const corsOptions ={
+    origin:'https://app.kableacademy.com/', 
+    credentials:true,            //access-control-allow-credentials:true
+    optionSuccessStatus:200
+}
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 // Environment Variables
