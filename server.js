@@ -3,18 +3,18 @@ const axios = require('axios');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const moment = require('moment');
-const cors = require('cors')
+const cors = require('cors');
 require('dotenv').config();
 
 const Token = require('./models/token.models');
 
 const app = express();
 
-const corsOptions ={
-    origin:'https://app.kableacademy.com/', 
-    credentials:true,            //access-control-allow-credentials:true
-    optionSuccessStatus:200
-}
+const corsOptions = {
+  origin: 'https://app.kableacademy.com/',
+  credentials: true, // access-control-allow-credentials:true
+  optionSuccessStatus: 200,
+};
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
@@ -30,7 +30,6 @@ const SECRET_KEY = process.env.SECRET_KEY;
 // MongoDB Connection
 mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlParser: true });
 mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
-
 
 // Get Valid Access Token
 async function getValidAccessToken() {
@@ -90,15 +89,6 @@ async function verifyCaptcha(token) {
     return false;
   }
 }
-app.get('/auth', (req, res) => {
-  const authorizationUri = `${AUTHORIZATION_URL}?${querystring.stringify({
-    client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
-    scope: SCOPES,
-    response_type: 'code',
-  })}`;
-  res.redirect(authorizationUri);
-});
 
 // Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
@@ -149,9 +139,12 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       }
     );
 
+    console.log('Search Response:', searchResponse.data);
+
     const existingContact = searchResponse.data.results[0];
     if (existingContact) {
       console.log('Contact exists, updating:', existingContact);
+
       const updateResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${existingContact.id}`,
         { properties: hubSpotData },
@@ -159,6 +152,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         }
       );
+
       console.log('Contact updated successfully:', updateResponse.data);
       return res.status(200).send({ message: 'Contact updated successfully', data: updateResponse.data });
     }
@@ -180,7 +174,6 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     res.status(500).send({ message: 'Server error during HubSpot operation', error: error.response?.data || error.message });
   }
 });
-
 
 // Start Server
 const PORT = process.env.PORT || 5000;
