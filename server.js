@@ -92,106 +92,6 @@ async function verifyCaptcha(token) {
 }
 
 // Handle Form Submission (app.post)
-// Resume Upload Route
-app.post('/api/resume-upload', resumeUpload.single('file'), async (req, res) => {
-  const { email } = req.body;
-  const file = req.file;
-
-  if (!email || !file) {
-    return res.status(400).send('Email and resume file are required.');
-  }
-
-  try {
-    // Get a valid access token
-    const accessToken = await getValidAccessToken();
-    console.log('Access token obtained:', accessToken);
-
-    // Get contact ID from email
-    const contactId = await getContactIdByEmail(email, accessToken);
-    console.log(`Contact ID for email ${email}: ${contactId}`);
-
-    // Determine the MIME type and ensure correct extension
-    const mimeType = file.mimetype;
-    console.log(`Detected MIME type: ${mimeType}`);
-
-    const fileExtension =
-      mimeType === 'application/pdf' ? '.pdf' :
-      mimeType === 'application/msword' ? '.doc' :
-      mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? '.docx' :
-      '';
-    if (!fileExtension) {
-      throw new Error('Invalid file type.');
-    }
-
-    // Ensure the file has the correct extension
-    const filePath = `${file.path}${fileExtension}`;
-    fs.renameSync(file.path, filePath);
-
-    // Prepare the form data for the file upload
-    const formData = new FormData();
-    formData.append('file', fs.createReadStream(filePath), {
-      filename: file.originalname,
-      contentType: mimeType,
-    });
-    formData.append('folderPath', 'documents/resumes');
-    formData.append('options', JSON.stringify({ access: 'PUBLIC_INDEXABLE' }));
-
-    // Upload the resume file to HubSpot
-    const fileUploadResponse = await axios.post(
-      'https://api.hubapi.com/files/v3/files',
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          ...formData.getHeaders(),
-        },
-      }
-    );
-
-    console.log('File uploaded successfully:', fileUploadResponse.data);
-
-    const fileUrl = fileUploadResponse.data.url;
-
-    // Update the contact with the file URL
-    const updateResponse = await updateContactWithFileUrl(contactId, fileUrl, accessToken);
-    console.log('Contact updated successfully:', updateResponse);
-
-    fs.unlinkSync(filePath); // Remove the file after upload
-
-    res.status(200).json(updateResponse);
-  } catch (error) {
-    console.error('Error uploading resume to HubSpot:', error.response?.data || error.message);
-    res.status(500).send('Error uploading resume to HubSpot.');
-  }
-});
-
-
-// Helper: Update Contact with File URL
-async function updateContactWithFileUrl(contactId, fileUrl, accessToken) {
-  try {
-    const response = await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
-      {
-        properties: {
-          resume: fileUrl, // Assuming 'resume' is the custom property in HubSpot
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error('Error updating contact with file URL:', error.response?.data || error.message);
-    throw error;
-  }
-}
-
-
 // Helper: Get Contact ID by Email
 async function getContactIdByEmail(email, accessToken) {
   try {
@@ -220,7 +120,7 @@ async function getContactIdByEmail(email, accessToken) {
     );
 
     if (response.data.results.length === 0) {
-      throw new Error(`Contact not found for email: ${email}`);
+      return null; // No contact found
     }
 
     return response.data.results[0].id;
@@ -230,16 +130,12 @@ async function getContactIdByEmail(email, accessToken) {
   }
 }
 
-// Helper: Update Contact with File URL
-async function updateContactWithFileUrl(contactId, fileUrl, accessToken) {
+// Helper: Update Contact
+async function updateContact(contactId, contactData, accessToken) {
   try {
     const response = await axios.patch(
       `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
-      {
-        properties: {
-          resume: fileUrl, // Assuming 'resume' is the custom property in HubSpot
-        },
-      },
+      { properties: contactData },
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -250,10 +146,102 @@ async function updateContactWithFileUrl(contactId, fileUrl, accessToken) {
 
     return response.data;
   } catch (error) {
-    console.error('Error updating contact with file URL:', error.response?.data || error.message);
+    console.error('Error updating contact:', error.response?.data || error.message);
     throw error;
   }
 }
+
+// Helper: Create Contact
+async function createContact(contactData, accessToken) {
+  try {
+    const response = await axios.post(
+      'https://api.hubapi.com/crm/v3/objects/contacts',
+      { properties: contactData },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error creating contact:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// Route: Handle Form Submission
+app.post('/api/intro-to-ai-payment', async (req, res) => {
+  const {
+    recaptchaToken,
+    firstName,
+    lastName,
+    email,
+    phoneNumber,
+    program,
+    time,
+    classDate,
+    postal,
+  } = req.body;
+
+  try {
+    // Verify reCAPTCHA
+    const captchaValid = await verifyCaptcha(recaptchaToken);
+    if (!captchaValid) {
+      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+    }
+
+    console.log('reCAPTCHA validation passed.');
+
+    // Format contact data
+    const contactData = {
+      firstname: firstName,
+      lastname: lastName,
+      email,
+      phone: phoneNumber,
+      program,
+      program_session: time,
+      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
+      zip: postal,
+    };
+
+    console.log('Formatted contact data:', contactData);
+
+    // Get a valid access token
+    const accessToken = await getValidAccessToken();
+    console.log('Access token obtained.');
+
+    // Check if contact exists
+    const contactId = await getContactIdByEmail(email, accessToken);
+
+    let hubspotResponse;
+    if (contactId) {
+      console.log(`Contact found with ID: ${contactId}. Updating contact...`);
+      // Update existing contact
+      hubspotResponse = await updateContact(contactId, contactData, accessToken);
+    } else {
+      console.log('No contact found. Creating new contact...');
+      // Create a new contact
+      hubspotResponse = await createContact(contactData, accessToken);
+    }
+
+    console.log('HubSpot response:', hubspotResponse);
+
+    res.status(200).send({
+      message: 'Contact successfully processed',
+      data: hubspotResponse,
+    });
+  } catch (error) {
+    console.error('Error processing form submission:', error.response?.data || error.message);
+    res.status(500).send({
+      message: 'Server error processing contact',
+      error: error.response?.data || error.message,
+    });
+  }
+});
+
 
 // Update Contact (app.patch)
 app.patch('/api/update-contact', async (req, res) => {
