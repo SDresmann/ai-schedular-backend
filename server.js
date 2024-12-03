@@ -11,9 +11,9 @@ const Token = require('./models/token.models');
 const app = express();
 
 const corsOptions = {
-    origin: 'https://app.kableacademy.com/',
-    credentials: true,
-    optionSuccessStatus: 200,
+  origin: 'https://app.kableacademy.com/',
+  credentials: true,
+  optionSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
@@ -34,64 +34,91 @@ mongoose.connection.once('open', () => console.log('MongoDB connected successful
 
 // Function to Get Valid Access Token
 async function getValidAccessToken() {
-    const token = await Token.findOne();
-    if (!token) throw new Error('No tokens found in the database');
+  const token = await Token.findOne();
+  if (!token) throw new Error('No tokens found in the database');
 
-    if (Date.now() > token.expiresAt) {
-        console.log('Access token expired, refreshing...');
+  if (Date.now() > token.expiresAt) {
+    console.log('Access token expired, refreshing...');
 
-        try {
-            const response = await axios.post(
-                TOKEN_URL,
-                new URLSearchParams({
-                    grant_type: 'refresh_token',
-                    client_id: CLIENT_ID,
-                    client_secret: CLIENT_SECRET,
-                    refresh_token: token.refreshToken,
-                }),
-                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-            );
-
-            token.accessToken = response.data.access_token;
-            token.refreshToken = response.data.refresh_token || token.refreshToken;
-            token.expiresAt = Date.now() + response.data.expires_in * 1000;
-            await token.save();
-
-            console.log('Access token refreshed successfully:', token.accessToken);
-            return token.accessToken;
-        } catch (error) {
-            console.error('Error refreshing access token:', error.response?.data || error.message);
-            throw new Error('Failed to refresh access token');
-        }
-    }
-
-    console.log('Access token is still valid:', token.accessToken);
-    return token.accessToken;
-}
-
-// Function to Verify reCAPTCHA Token
-async function verifyCaptcha(token) {
     try {
-        const response = await axios.post(
-            'https://www.google.com/recaptcha/api/siteverify',
-            {},
-            {
-                params: {
-                    secret: SECRET_KEY,
-                    response: token,
-                },
-            }
-        );
+      const response = await axios.post(
+        TOKEN_URL,
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+          refresh_token: token.refreshToken,
+        }),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
 
-        console.log('reCAPTCHA response:', response.data);
-        return response.data.success && response.data.score >= 0.5;
+      token.accessToken = response.data.access_token;
+      token.refreshToken = response.data.refresh_token || token.refreshToken;
+      token.expiresAt = Date.now() + response.data.expires_in * 1000;
+      await token.save();
+
+      console.log('Access token refreshed successfully:', token.accessToken);
+      return token.accessToken;
     } catch (error) {
-        console.error('Error validating reCAPTCHA:', error.response?.data || error.message);
-        return false;
+      console.error('Error refreshing access token:', error.response?.data || error.message);
+      throw new Error('Failed to refresh access token');
     }
+  }
+
+  console.log('Access token is still valid:', token.accessToken);
+  return token.accessToken;
 }
 
-// Handle Form Submission (app.post)
+// Route: Initiate Authorization Flow
+app.get('/auth', (req, res) => {
+  const SCOPES = 'contacts';
+  const authorizationUri = `${AUTHORIZATION_URL}?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
+    REDIRECT_URI
+  )}&scope=${SCOPES}&response_type=code`;
+  res.redirect(authorizationUri);
+});
+
+// Route: Handle Authorization Callback
+app.get('/auth/callback', async (req, res) => {
+  const authorizationCode = req.query.code;
+
+  if (!authorizationCode) {
+    return res.status(400).send('Authorization code missing.');
+  }
+
+  try {
+    const response = await axios.post(
+      TOKEN_URL,
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI,
+        code: authorizationCode,
+      }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    const { access_token, refresh_token, expires_in } = response.data;
+
+    // Save tokens to the database
+    await Token.findOneAndUpdate(
+      {},
+      {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: Date.now() + expires_in * 1000,
+      },
+      { upsert: true }
+    );
+
+    res.send('Authorization successful! Tokens have been saved.');
+  } catch (error) {
+    console.error('Error exchanging authorization code:', error.response?.data || error.message);
+    res.status(500).send('Failed to exchange authorization code for tokens.');
+  }
+});
+
 // Helper: Get Contact ID by Email
 async function getContactIdByEmail(email, accessToken) {
   try {
@@ -120,7 +147,7 @@ async function getContactIdByEmail(email, accessToken) {
     );
 
     if (response.data.results.length === 0) {
-      return null; // No contact found
+      return null;
     }
 
     return response.data.results[0].id;
@@ -130,72 +157,27 @@ async function getContactIdByEmail(email, accessToken) {
   }
 }
 
-// Helper: Update Contact
-async function updateContact(contactId, contactData, accessToken) {
-  try {
-    const response = await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
-      { properties: contactData },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error('Error updating contact:', error.response?.data || error.message);
-    throw error;
-  }
-}
-
-// Helper: Create Contact
-async function createContact(contactData, accessToken) {
-  try {
-    const response = await axios.post(
-      'https://api.hubapi.com/crm/v3/objects/contacts',
-      { properties: contactData },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error('Error creating contact:', error.response?.data || error.message);
-    throw error;
-  }
-}
-
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  const {
-    recaptchaToken,
-    firstName,
-    lastName,
-    email,
-    phoneNumber,
-    program,
-    time,
-    classDate,
-    postal,
-  } = req.body;
+  const { recaptchaToken, firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
 
   try {
     // Verify reCAPTCHA
-    const captchaValid = await verifyCaptcha(recaptchaToken);
-    if (!captchaValid) {
+    const captchaValid = await axios.post(
+      'https://www.google.com/recaptcha/api/siteverify',
+      {},
+      {
+        params: { secret: SECRET_KEY, response: recaptchaToken },
+      }
+    );
+
+    if (!captchaValid.data.success || captchaValid.data.score < 0.5) {
       return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
     }
 
     console.log('reCAPTCHA validation passed.');
 
-    // Format contact data
+    // Prepare contact data
     const contactData = {
       firstname: firstName,
       lastname: lastName,
@@ -209,82 +191,46 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
 
     console.log('Formatted contact data:', contactData);
 
-    // Get a valid access token
     const accessToken = await getValidAccessToken();
-    console.log('Access token obtained.');
 
-    // Check if contact exists
     const contactId = await getContactIdByEmail(email, accessToken);
 
     let hubspotResponse;
     if (contactId) {
       console.log(`Contact found with ID: ${contactId}. Updating contact...`);
-      // Update existing contact
-      hubspotResponse = await updateContact(contactId, contactData, accessToken);
+      hubspotResponse = await axios.patch(
+        `${HUBSPOT_API_URL}/${contactId}`,
+        { properties: contactData },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
     } else {
       console.log('No contact found. Creating new contact...');
-      // Create a new contact
-      hubspotResponse = await createContact(contactData, accessToken);
+      hubspotResponse = await axios.post(
+        HUBSPOT_API_URL,
+        { properties: contactData },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
     }
 
-    console.log('HubSpot response:', hubspotResponse);
-
-    res.status(200).send({
-      message: 'Contact successfully processed',
-      data: hubspotResponse,
-    });
+    console.log('HubSpot response:', hubspotResponse.data);
+    res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
     console.error('Error processing form submission:', error.response?.data || error.message);
     res.status(500).send({
-      message: 'Server error processing contact',
+      message: 'Error processing contact data',
       error: error.response?.data || error.message,
     });
   }
-});
-
-
-// Update Contact (app.patch)
-app.patch('/api/update-contact', async (req, res) => {
-    const { email, updatedProperties } = req.body;
-
-    try {
-        console.log('Received update request:', req.body);
-
-        const accessToken = await getValidAccessToken();
-
-        // Search for existing contact
-        const searchResponse = await axios.post(
-            `${HUBSPOT_API_URL}/search`,
-            {
-                filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: email }] }],
-            },
-            {
-                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            }
-        );
-
-        const existingContact = searchResponse.data.results[0];
-        if (existingContact) {
-            console.log('Updating existing contact:', existingContact);
-
-            const updateResponse = await axios.patch(
-                `${HUBSPOT_API_URL}/${existingContact.id}`,
-                { properties: updatedProperties },
-                {
-                    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                }
-            );
-
-            console.log('Update response from HubSpot:', updateResponse.data);
-            return res.status(200).send({ message: 'Contact updated successfully', data: updateResponse.data });
-        } else {
-            console.log('Contact not found for update');
-            res.status(404).send({ message: 'Contact not found' });
-        }
-    } catch (error) {
-        console.error('Error during contact update:', error.response?.data || error.message);
-        res.status(500).send({ message: 'Server error', error: error.response?.data || error.message });
-    }
 });
 
 // Start Server
