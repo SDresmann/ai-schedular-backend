@@ -162,22 +162,6 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
   const { recaptchaToken, firstName, lastName, email, phoneNumber, program, time, classDate, postal } = req.body;
 
   try {
-    // Verify reCAPTCHA
-    const captchaValid = await axios.post(
-      'https://www.google.com/recaptcha/api/siteverify',
-      {},
-      {
-        params: { secret: SECRET_KEY, response: recaptchaToken },
-      }
-    );
-
-    if (!captchaValid.data.success || captchaValid.data.score < 0.5) {
-      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
-    }
-
-    console.log('reCAPTCHA validation passed.');
-
-    // Prepare contact data
     const contactData = {
       firstname: firstName,
       lastname: lastName,
@@ -189,15 +173,11 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       zip: postal,
     };
 
-    console.log('Formatted contact data:', contactData);
-
     const accessToken = await getValidAccessToken();
-
     const contactId = await getContactIdByEmail(email, accessToken);
 
     let hubspotResponse;
     if (contactId) {
-      console.log(`Contact found with ID: ${contactId}. Updating contact...`);
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
         { properties: contactData },
@@ -209,7 +189,6 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
         }
       );
     } else {
-      console.log('No contact found. Creating new contact...');
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
         { properties: contactData },
@@ -222,14 +201,41 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       );
     }
 
-    console.log('HubSpot response:', hubspotResponse.data);
     res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
-    console.error('Error processing form submission:', error.response?.data || error.message);
     res.status(500).send({
       message: 'Error processing contact data',
       error: error.response?.data || error.message,
     });
+  }
+});
+
+// Route: Update Contact with Additional Properties
+app.patch('/api/update-contact', async (req, res) => {
+  const { email, updatedProperties } = req.body;
+
+  try {
+    const accessToken = await getValidAccessToken();
+    const contactId = await getContactIdByEmail(email, accessToken);
+
+    if (!contactId) {
+      return res.status(404).send({ message: 'Contact not found' });
+    }
+
+    const updateResponse = await axios.patch(
+      `${HUBSPOT_API_URL}/${contactId}`,
+      { properties: updatedProperties },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    res.status(200).send({ message: 'Contact updated successfully', data: updateResponse.data });
+  } catch (error) {
+    res.status(500).send({ message: 'Error updating contact', error: error.response?.data || error.message });
   }
 });
 
