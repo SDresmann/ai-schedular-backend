@@ -238,6 +238,19 @@ app.patch('/api/update-contact', async (req, res) => {
     res.status(500).send({ message: 'Error updating contact', error: error.response?.data || error.message });
   }
 });
+async function callWithRetry(apiCall, retries = 3, delay = 1000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      if (i < retries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delay * Math.pow(2, i)));
+      } else {
+        throw error;
+      }
+    }
+  }
+}
 
 // Start Server
 const PORT = process.env.PORT || 5000;
