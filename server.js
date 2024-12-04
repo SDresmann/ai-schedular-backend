@@ -11,8 +11,6 @@ const Token = require('./models/token.models');
 
 const app = express();
 
-const cors = require('cors');
-
 const corsOptions = {
   origin: ['http://localhost:3000', 'https://app.kableacademy.com'], // Add both local and production origins
   credentials: true, // If you need to send cookies or authentication headers
