@@ -12,7 +12,7 @@ const Token = require('./models/token.models');
 const app = express();
 
 const corsOptions = {
-  origin: 'https://app.kableacademy.com/',
+  origin: 'https://www.kableacademy.com/',
   credentials: true,
   optionSuccessStatus: 200,
 };
