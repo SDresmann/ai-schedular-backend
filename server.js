@@ -36,41 +36,62 @@ mongoose.connection.once('open', () => console.log('MongoDB connected successful
 
 // Function to Get Valid Access Token
 async function getValidAccessToken() {
-  const token = await Token.findOne();
-  if (!token) throw new Error('No tokens found in the database');
+  try {
+    console.log("🔍 Checking MongoDB for stored token...");
 
-  if (Date.now() > token.expiresAt) {
-    console.log('Access token expired, refreshing...');
-
-    try {
-      const response = await axios.post(
-        TOKEN_URL,
-        new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-          refresh_token: token.refreshToken,
-        }),
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-      );
-
-      token.accessToken = response.data.access_token;
-      token.refreshToken = response.data.refresh_token || token.refreshToken;
-      token.expiresAt = Date.now() + response.data.expires_in * 1000;
-      await token.save();
-
-      console.log('Access token refreshed successfully:', token.accessToken);
-      return token.accessToken;
-    } catch (error) {
-      console.error('Error refreshing access token:', error.response?.data || error.message);
-      throw new Error('Failed to refresh access token');
+    const token = await Token.findOne();
+    if (!token) {
+      console.error('❌ No tokens found in the database');
+      throw new Error('No tokens found in the database');
     }
+
+    console.log('📅 Stored Token Expiry Time:', new Date(token.expiresAt));
+    console.log('⏰ Current Time:', new Date());
+    console.log('⌛ Checking if token is expired:', Date.now() > token.expiresAt);
+
+    // If the token is still valid, return it
+    if (Date.now() < token.expiresAt) {
+      console.log('✅ Access token is still valid:', token.accessToken);
+      return token.accessToken;
+    }
+
+    // If the token is expired, refresh it
+    console.log('🔄 Access token expired, refreshing...');
+
+    const response = await axios.post(
+      TOKEN_URL,
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: token.refreshToken,
+      }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    if (!response.data.access_token) {
+      console.error('❌ HubSpot did not return a new access token!');
+      throw new Error('HubSpot refresh failed: No new access token');
+    }
+
+    // Update token in database
+    token.accessToken = response.data.access_token;
+    token.refreshToken = response.data.refresh_token || token.refreshToken; // Keep old refresh token if none is provided
+    token.expiresAt = Date.now() + response.data.expires_in * 1000; // Convert seconds to milliseconds
+
+    await token.save();
+    console.log('💾 New Access Token Saved to Database');
+    console.log('✅ New Access Token:', token.accessToken);
+
+    return token.accessToken;
+  } catch (error) {
+    console.error('❌ Error refreshing access token:', error.response?.data || error.message);
+    throw new Error('Failed to refresh access token');
   }
-
-  console.log('Access token is still valid:', token.accessToken);
-  return token.accessToken;
 }
-
+getValidAccessToken()
+  .then(token => console.log("✅ Server Startup - Access Token:", token))
+  .catch(error => console.error("❌ Server Startup - Token Error:", error.message));
 // Helper: Verify reCAPTCHA Token
 async function verifyRecaptcha(token) {
   try {
@@ -152,9 +173,9 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       program_session: time,
       program_session2: time2,
       program_session3: time3,
-      intro_to_ai_program_date: moment(classDate),
-      intro_to_ai_program_date2: moment(classDate2),
-      intro_to_ai_program_date3: moment(classDate3),
+      intro_to_ai_program_date: convertDate(classDate),
+      intro_to_ai_program_date2: convertDate(classDate2),
+      intro_to_ai_program_date3: convertDate(classDate3),
       zip: postal,
     };
 
