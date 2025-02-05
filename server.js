@@ -171,11 +171,11 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       email,
       phone: phoneNumber,
       program_session: time,
-      program_session2: time2,
-      program_session3: time3,
+      program_session_2: time2,
+      program_session_3: time3,
       intro_to_ai_program_date: convertDate(classDate),
-      intro_to_ai_program_date2: convertDate(classDate2),
-      intro_to_ai_program_date3: convertDate(classDate3),
+      intro_to_ai_program_date_2: convertDate(classDate2),
+      intro_to_ai_program_date_3: convertDate(classDate3),
       zip: postal,
     };
 
