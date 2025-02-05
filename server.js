@@ -152,9 +152,9 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       program_session: time,
       program_session2: time2,
       program_session3: time3,
-      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
-      intro_to_ai_program_date2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
-      intro_to_ai_program_date3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
+      intro_to_ai_program_date: moment(classDate),
+      intro_to_ai_program_date2: moment(classDate2),
+      intro_to_ai_program_date3: moment(classDate3),
       zip: postal,
     };
 
