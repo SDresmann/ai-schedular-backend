@@ -211,10 +211,12 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
   // ✅ Function to fix program session values
   const fixProgramTime = (timeValue) => {
     const timeMap = {
-      "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM",
-      "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
+      "10am-1pm EST/9am-12pm CST": "10am-1pm EST/9am-12pm CST",
+      "2pm-5pm EST/1pm-4pm CST": "2pm-5pm EST/1pm-4pm CST",
+      "6pm-9pm EST/5pm-8pm CST": "6pm-9pm EST/5pm-8pm CST",
+      "4pm-7pm EST": "4pm-7pm EST"
     };
-    return timeMap[timeValue] || timeValue; // Convert or return the original value if not found
+    return timeMap[timeValue] || timeValue; // Ensure correct value is sent
   };
 
   try {
