@@ -177,101 +177,79 @@ async function getContactIdByEmail(email, accessToken) {
 app.post("/api/intro-to-ai-payment", async (req, res) => {
   console.log("🚀 Received Request Body:", req.body);
 
-  // Check if request body is empty
-  if (!req.body || Object.keys(req.body).length === 0) {
-    console.error("❌ ERROR: Request body is empty or not parsed correctly!");
-    return res.status(400).json({ message: "Request body is empty or invalid" });
-  }
-
-  // Destructure expected fields from request body
   const {
-    firstname, lastname, email, phone, 
+    firstname, lastname, email, phone,
     program_session, program_time_2, program_time_3,
     intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
     zip, recaptchaToken
   } = req.body;
 
-  // ✅ Required Fields Validation
-  const requiredFields = [
-    "firstname", "lastname", "email", "phone",
-    "program_session", "program_time_2", "program_time_3",
-    "intro_to_ai_program_date", "intro_to_ai_date_2", "intro_to_ai_date_3",
-    "zip", "recaptchaToken"
-  ];
+  // ✅ Convert Dates to Timestamps
+  const convertDate = (date) => moment(date, "MM/DD/YYYY").valueOf();
 
-  const missingFields = requiredFields.filter(field => !req.body[field]);
+  // ✅ Ensure Dates are Monday-Friday
+  const isWeekday = (date) => {
+    const day = moment(date, "MM/DD/YYYY").isoWeekday();
+    return day >= 1 && day <= 5;
+  };
 
-  if (missingFields.length > 0) {
-    console.error("❌ MISSING FIELDS:", missingFields);
-    return res.status(400).json({ message: "Missing required fields", missingFields });
+  if (!isWeekday(intro_to_ai_program_date)) {
+    return res.status(400).json({ message: "Intro to AI Program Date must be Monday-Friday" });
   }
 
-  console.log("✅ All required fields received:", req.body);
+  // ✅ Fix Time Formatting
+  const formatTime = (time) => {
+    const timeMap = {
+      "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM",
+      "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
+    };
+    return timeMap[time] || time;
+  };
+
+  // ✅ Prepare Contact Data
+  const contactData = {
+    firstname,
+    lastname,
+    email,
+    phone,
+    program_session: formatTime(program_session),
+    program_time_2: formatTime(program_time_2),
+    program_time_3: formatTime(program_time_3),
+    intro_to_ai_program_date: convertDate(intro_to_ai_program_date),
+    intro_to_ai_date_2: convertDate(intro_to_ai_date_2),
+    intro_to_ai_date_3: convertDate(intro_to_ai_date_3),
+    zip,
+  };
 
   try {
-    // ✅ Verify reCAPTCHA Token
+    // ✅ Verify reCAPTCHA
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
     if (!recaptchaValid) {
-      console.error("❌ Invalid reCAPTCHA token!");
       return res.status(400).json({ message: "Invalid reCAPTCHA token" });
     }
-    console.log("✅ reCAPTCHA verification passed!");
 
-    // ✅ Prepare Contact Data for HubSpot
-    const contactData = {
-      firstname,
-      lastname,
-      email,
-      phone,
-      program_session,
-      program_time_2,
-      program_time_3,
-      intro_to_ai_program_date, // No need to convert, frontend should send in proper format
-      intro_to_ai_date_2,
-      intro_to_ai_date_3,
-      zip
-    };
-
-    // ✅ Obtain Access Token
+    // ✅ Get Access Token
     const accessToken = await getValidAccessToken();
-    console.log("🔑 Using Access Token:", accessToken);
 
-    // ✅ Check if Contact Exists in HubSpot
+    // ✅ Check if Contact Exists
     const contactId = await getContactIdByEmail(email, accessToken);
 
     let hubspotResponse;
     if (contactId) {
-      // ✅ Update existing contact
-      console.log(`✏️ Updating existing contact: ${contactId}`);
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
         { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          }
-        }
+        { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
       );
-      console.log(`✅ Contact updated successfully: ${contactId}`);
     } else {
-      // ✅ Create new contact
-      console.log("➕ Creating new contact...");
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
         { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          }
-        }
+        { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
       );
-      console.log("✅ New contact created successfully!");
     }
 
     res.status(200).json({ message: "Contact successfully processed", data: hubspotResponse.data });
-
   } catch (error) {
     console.error("❌ Error processing form submission:", error.response?.data || error.message);
     res.status(500).json({
@@ -280,6 +258,7 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
     });
   }
 });
+
 
 // Route: Handle Form Submission
 app.patch("/api/update-contact", async (req, res) => {
