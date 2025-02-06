@@ -188,28 +188,26 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
   const convertDate = (date) => moment(date, "MM/DD/YYYY").valueOf();
 
   // ✅ Fix Time Formatting to Match HubSpot's Allowed Values
-  const formatTime = (time) => {
+  const fixProgramTime = (time) => {
     const timeMap = {
-      "10am-1pm EST/9am-12pm CST": "10am-1pm EST/9am-12pm CST",
-      "2pm-5pm EST/1pm-4pm CST": "2pm-5pm EST/1pm-4pm CST",
-      "6pm-9pm EST/5pm-8pm CST": "6pm-9pm EST/5pm-8pm CST",
-      "4pm-7pm EST": "4pm-7pm EST",
+      "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM",
+      "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
     };
-    return timeMap[time] || time; // Use mapped value or fallback
+    return timeMap[time] || time; // Convert or keep the original if no match
   };
-
-  // ✅ Prepare Contact Data
+  
+  // Use the fixed times in the request body
   const contactData = {
     firstname,
     lastname,
     email,
     phone,
-    program_session: formatTime(program_session),
-    program_time_2: formatTime(program_time_2),
-    program_time_3: formatTime(program_time_3),
-    intro_to_ai_program_date: convertDate(intro_to_ai_program_date),
-    intro_to_ai_date_2: convertDate(intro_to_ai_date_2),
-    intro_to_ai_date_3: convertDate(intro_to_ai_date_3),
+    program_session: fixProgramTime(time),
+    program_time_2: fixProgramTime(time2),
+    program_time_3: fixProgramTime(time3),
+    intro_to_ai_program_date,
+    intro_to_ai_date_2,
+    intro_to_ai_date_3,
     zip,
   };
 
