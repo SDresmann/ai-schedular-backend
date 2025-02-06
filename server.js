@@ -187,21 +187,13 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
   // ✅ Convert Dates to Timestamps
   const convertDate = (date) => moment(date, "MM/DD/YYYY").valueOf();
 
-  // ✅ Ensure Dates are Monday-Friday
-  const isWeekday = (date) => {
-    const day = moment(date, "MM/DD/YYYY").isoWeekday();
-    return day >= 1 && day <= 5;
-  };
-
-  if (!isWeekday(intro_to_ai_program_date)) {
-    return res.status(400).json({ message: "Intro to AI Program Date must be Monday-Friday" });
-  }
-
   // ✅ Fix Time Formatting
   const formatTime = (time) => {
     const timeMap = {
-      "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM",
-      "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
+      "2pm-5pm EST/1pm-4pm CST": "2pm-5pm EST/1pm-4pm CST",
+      "6pm-9pm EST/5pm-8pm CST": "6pm-9pm EST/5pm-8pm CST",
+      "10am-1pm EST/9am-12pm CST": "10am-1pm EST/9am-12pm CST",
+      "4pm-7pm EST": "4pm-7pm EST"
     };
     return timeMap[time] || time;
   };
@@ -258,6 +250,7 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
     });
   }
 });
+
 
 
 // Route: Handle Form Submission
