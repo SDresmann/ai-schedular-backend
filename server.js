@@ -176,50 +176,78 @@ async function getContactIdByEmail(email, accessToken) {
 }
 
 // Route: Handle Form Submission
-app.post("/api/intro-to-ai-payment", async (req, res) => {
-  console.log("🚀 Received a POST request!");
+app.patch("/api/update-contact", async (req, res) => {
+  console.log("🚀 Received PATCH Request Body:", req.body);
 
-  // ✅ 1️⃣ Log Raw Request
-  console.log("🔍 Raw Request Body:", req.body);
+  try {
+    // Destructure expected fields
+    const {
+      firstname, lastname, email, phone,
+      program_session, program_time_2, program_time_3,
+      intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
+      zip, recaptchaToken
+    } = req.body;
 
-  if (!req.body || Object.keys(req.body).length === 0) {
-    console.error("❌ ERROR: Request body is empty or not parsed correctly!");
-    return res.status(400).json({ message: "Request body is empty or invalid" });
+    console.log("🔍 Extracted Data:", {
+      firstname, lastname, email, phone,
+      program_session, program_time_2, program_time_3,
+      intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
+      zip, recaptchaToken
+    });
+
+    // ✅ Verify reCAPTCHA
+    const recaptchaValid = await verifyRecaptcha(recaptchaToken);
+    if (!recaptchaValid) {
+      console.error("❌ Invalid reCAPTCHA token!");
+      return res.status(400).json({ message: "Invalid reCAPTCHA token" });
+    }
+    console.log("✅ reCAPTCHA verification passed!");
+
+    // ✅ Obtain Access Token
+    const accessToken = await getValidAccessToken();
+    console.log("🔑 Using Access Token:", accessToken);
+
+    // ✅ Check if contact exists in HubSpot
+    const contactId = await getContactIdByEmail(email, accessToken);
+    if (!contactId) {
+      console.error("❌ Contact not found in HubSpot, cannot update.");
+      return res.status(404).json({ message: "Contact not found in HubSpot" });
+    }
+
+    console.log(`🔄 Updating existing HubSpot contact: ${contactId}`);
+
+    // ✅ Prepare Update Data
+    const updateData = {
+      properties: {
+        firstname, lastname, email, phone,
+        program_session, program_time_2, program_time_3,
+        intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
+        zip
+      }
+    };
+
+    // ✅ HubSpot API URL (Make sure it's defined in your environment variables)
+    const HUBSPOT_API_URL = process.env.HUBSPOT_API_URL || 'https://api.hubapi.com/crm/v3/objects/contacts';
+
+    // ✅ Send PATCH Request to HubSpot
+    const hubspotResponse = await axios.patch(
+      `${HUBSPOT_API_URL}/${contactId}`,
+      updateData,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    console.log("✅ HubSpot Contact Updated Successfully:", hubspotResponse.data);
+    res.status(200).json({ message: "Contact updated successfully", data: hubspotResponse.data });
+
+  } catch (error) {
+    console.error("❌ Error updating contact:", error.response?.data || error.message);
+    res.status(500).json({ message: "Error updating contact", error: error.response?.data || error.message });
   }
-
-  // ✅ 2️⃣ Log Expected Fields from Request
-  const {
-    firstname, lastname, email, phone,
-    program_session, program_time_2, program_time_3,
-    intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
-    zip, recaptchaToken
-  } = req.body;
-
-  console.log("🔍 Parsed Fields:", {
-    firstname, lastname, email, phone,
-    program_session, program_time_2, program_time_3,
-    intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
-    zip, recaptchaToken
-  });
-
-  // ✅ 3️⃣ Check Required Fields
-  const requiredFields = [
-    "firstname", "lastname", "email", "phone",
-    "program_session", "program_time_2", "program_time_3",
-    "intro_to_ai_program_date", "intro_to_ai_date_2", "intro_to_ai_date_3",
-    "zip", "recaptchaToken"
-  ];
-
-  const missingFields = requiredFields.filter(field => !req.body[field]);
-
-  if (missingFields.length > 0) {
-    console.error("❌ MISSING FIELDS:", missingFields);
-    return res.status(400).json({ message: "Missing required fields", missingFields });
-  }
-
-  console.log("✅ All required fields received!");
-
-  res.status(200).json({ message: "Request received!", receivedData: req.body });
 });
 
 
