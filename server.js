@@ -12,16 +12,15 @@ const Token = require('./models/token.models');
 const app = express();
 
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://app.kableacademy.com'], // Add both local and production origins
-  credentials: true, // If you need to send cookies or authentication headers
-  methods: ['GET', 'POST', 'PATCH', 'DELETE'], // Allowed HTTP methods
-  allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
+  origin: ["http://localhost:3000", "https://app.kableacademy.com"], // Frontend domains
+  methods: ["GET", "POST", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
-app.use(cors(corsOptions));
-app.use(bodyParser.json());
 app.use(express.json()); // ✅ Ensure JSON body parsing
 app.use(express.urlencoded({ extended: true })); // ✅ Ensure URL-encoded parsing
+app.use(bodyParser.json());
+app.use(cors());
 
 // Environment Variables
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -91,6 +90,30 @@ async function getValidAccessToken() {
     throw new Error('Failed to refresh access token');
   }
 }
+async function verifyRecaptcha(recaptchaToken) {
+  const secretKey = process.env.SECRET_KEY; // Your reCAPTCHA secret key
+
+  console.log("🔍 Verifying reCAPTCHA Token:", recaptchaToken);
+
+  try {
+    const response = await axios.post(
+      "https://www.google.com/recaptcha/api/siteverify",
+      new URLSearchParams({
+        secret: secretKey,
+        response: recaptchaToken,
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+
+    console.log("✅ reCAPTCHA API Response:", response.data);
+    
+    return response.data.success; // Returns true if valid, false if invalid
+  } catch (error) {
+    console.error("❌ Error verifying reCAPTCHA:", error.response?.data || error.message);
+    return false;
+  }
+}
+
 getValidAccessToken()
   .then(token => console.log("✅ Server Startup - Access Token:", token))
   .catch(error => console.error("❌ Server Startup - Token Error:", error.message));
@@ -153,95 +176,54 @@ async function getContactIdByEmail(email, accessToken) {
 }
 
 // Route: Handle Form Submission
-app.post('/api/intro-to-ai-payment', async (req, res) => {
-  console.log("🔍 Incoming Request Data:", req.body); // Debug incoming request
+app.post("/api/intro-to-ai-payment", async (req, res) => {
+  console.log("🚀 Received a POST request!");
 
-  // If `req.body` is empty, return an error
+  // ✅ 1️⃣ Log Raw Request
+  console.log("🔍 Raw Request Body:", req.body);
+
   if (!req.body || Object.keys(req.body).length === 0) {
-    console.error("❌ Request body is empty!");
-    return res.status(400).json({ message: "No request body received" });
+    console.error("❌ ERROR: Request body is empty or not parsed correctly!");
+    return res.status(400).json({ message: "Request body is empty or invalid" });
   }
 
-  try {
-    // Extract form data
-    const { firstName, lastName, email, phoneNumber, time, time2, time3, classDate, classDate2, classDate3, postal, recaptchaToken } = req.body;
+  // ✅ 2️⃣ Log Expected Fields from Request
+  const {
+    firstname, lastname, email, phone,
+    program_session, program_time_2, program_time_3,
+    intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
+    zip, recaptchaToken
+  } = req.body;
 
-    // Ensure required fields are present
-    if (!firstName || !lastName || !email || !phoneNumber || !time || !time2 || !time3 || !classDate || !classDate2 || !classDate3 || !postal || !recaptchaToken) {
-      console.error("❌ Missing required fields!");
-      return res.status(400).json({ message: "Missing required fields" });
-    }
+  console.log("🔍 Parsed Fields:", {
+    firstname, lastname, email, phone,
+    program_session, program_time_2, program_time_3,
+    intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
+    zip, recaptchaToken
+  });
 
-    console.log("✅ Received reCAPTCHA Token:", recaptchaToken);
+  // ✅ 3️⃣ Check Required Fields
+  const requiredFields = [
+    "firstname", "lastname", "email", "phone",
+    "program_session", "program_time_2", "program_time_3",
+    "intro_to_ai_program_date", "intro_to_ai_date_2", "intro_to_ai_date_3",
+    "zip", "recaptchaToken"
+  ];
 
-    // Verify reCAPTCHA
-    console.log("🔍 Verifying reCAPTCHA token...");
-    const recaptchaValid = await verifyRecaptcha(recaptchaToken);
-    if (!recaptchaValid) {
-      console.error("❌ Invalid reCAPTCHA token");
-      return res.status(400).json({ message: "Invalid reCAPTCHA token" });
-    }
-    console.log("✅ reCAPTCHA verification passed.");
+  const missingFields = requiredFields.filter(field => !req.body[field]);
 
-    // Get a valid HubSpot access token
-    console.log("🔍 Fetching HubSpot Access Token...");
-    const accessToken = await getValidAccessToken();
-    console.log("✅ Access Token Retrieved");
-
-    // Check if the contact already exists in HubSpot
-    console.log("🔍 Checking if contact exists in HubSpot...");
-    const contactId = await getContactIdByEmail(email, accessToken);
-
-    console.log("✅ Contact ID:", contactId ? contactId : "New Contact");
-
-    // Convert dates to HubSpot's timestamp format
-    function convertDate(dateString) {
-      if (!dateString) return null;
-      return moment(dateString, "MM/DD/YYYY").utc().startOf("day").valueOf();
-    }
-
-    // Prepare contact data
-    const contactData = {
-      firstname: firstName,
-      lastname: lastName,
-      email,
-      phone: phoneNumber,
-      program_session: time,
-      program_session2: time2,
-      program_session3: time3,
-      intro_to_ai_program_date: convertDate(classDate),
-      intro_to_ai_program_date2: convertDate(classDate2),
-      intro_to_ai_program_date3: convertDate(classDate3),
-      zip: postal,
-    };
-
-    console.log("✅ Contact Data Prepared:", contactData);
-
-    let hubspotResponse;
-    if (contactId) {
-      console.log("🔄 Updating existing HubSpot contact...");
-      hubspotResponse = await axios.patch(
-        `${HUBSPOT_API_URL}/${contactId}`,
-        { properties: contactData },
-        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
-      );
-    } else {
-      console.log("🆕 Creating new HubSpot contact...");
-      hubspotResponse = await axios.post(
-        HUBSPOT_API_URL,
-        { properties: contactData },
-        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log("✅ HubSpot Response:", hubspotResponse.data);
-    res.status(200).json({ message: "Contact successfully processed", data: hubspotResponse.data });
-
-  } catch (error) {
-    console.error("❌ Error processing request:", error.response?.data || error.message);
-    res.status(500).json({ message: "Error processing request", error: error.response?.data || error.message });
+  if (missingFields.length > 0) {
+    console.error("❌ MISSING FIELDS:", missingFields);
+    return res.status(400).json({ message: "Missing required fields", missingFields });
   }
+
+  console.log("✅ All required fields received!");
+
+  res.status(200).json({ message: "Request received!", receivedData: req.body });
 });
+
+
+
 
 
 // Start Server
