@@ -190,12 +190,10 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
   // ✅ Fix Time Formatting
   const formatTime = (time) => {
     const timeMap = {
-      "2pm-5pm EST/1pm-4pm CST": "2pm-5pm EST/1pm-4pm CST",
-      "6pm-9pm EST/5pm-8pm CST": "6pm-9pm EST/5pm-8pm CST",
-      "10am-1pm EST/9am-12pm CST": "10am-1pm EST/9am-12pm CST",
-      "4pm-7pm EST": "4pm-7pm EST"
+      "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM", 
+      "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
     };
-    return timeMap[time] || time;
+    return timeMap[time] || time; // Use mapped value or fallback
   };
 
   // ✅ Prepare Contact Data
