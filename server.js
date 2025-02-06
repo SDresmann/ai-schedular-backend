@@ -175,71 +175,110 @@ async function getContactIdByEmail(email, accessToken) {
   }
 }
 app.post("/api/intro-to-ai-payment", async (req, res) => {
-  console.log("🚀 Received Request Body:", req.body);
+  console.log("🚀 Received Raw Request Body:", req.body);
 
+  // Check if request body is empty
+  if (!req.body || Object.keys(req.body).length === 0) {
+    console.error("❌ ERROR: Request body is empty or not parsed correctly!");
+    return res.status(400).json({ message: "Request body is empty or invalid" });
+  }
+
+  // Extract fields from request body
   const {
-    firstname, lastname, email, phone,
+    firstname, lastname, email, phone, 
     program_session, program_time_2, program_time_3,
     intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
     zip, recaptchaToken
   } = req.body;
 
-  // ✅ Convert Dates to Timestamps
-  const convertDate = (date) => moment(date, "MM/DD/YYYY").valueOf();
+  // ✅ Ensure all required fields exist
+  const requiredFields = [
+    "firstname", "lastname", "email", "phone",
+    "program_session", "program_time_2", "program_time_3",
+    "intro_to_ai_program_date", "intro_to_ai_date_2", "intro_to_ai_date_3",
+    "zip", "recaptchaToken"
+  ];
 
-  // ✅ Fix Time Formatting to Match HubSpot's Allowed Values
-  const fixProgramTime = (time) => {
+  const missingFields = requiredFields.filter(field => !req.body[field]);
+
+  if (missingFields.length > 0) {
+    console.error("❌ MISSING FIELDS:", missingFields);
+    return res.status(400).json({ message: "Missing required fields", missingFields });
+  }
+
+  console.log("✅ All required fields received:", req.body);
+
+  // ✅ Function to fix program session values
+  const fixProgramTime = (timeValue) => {
     const timeMap = {
       "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM",
       "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
     };
-    return timeMap[time] || time; // Convert or keep the original if no match
-  };
-  
-  // Use the fixed times in the request body
-  const contactData = {
-    firstname,
-    lastname,
-    email,
-    phone,
-    program_session: fixProgramTime(time),
-    program_time_2: fixProgramTime(time2),
-    program_time_3: fixProgramTime(time3),
-    intro_to_ai_program_date,
-    intro_to_ai_date_2,
-    intro_to_ai_date_3,
-    zip,
+    return timeMap[timeValue] || timeValue; // Convert or return the original value if not found
   };
 
   try {
-    // ✅ Verify reCAPTCHA
+    // ✅ Verify reCAPTCHA Token
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
     if (!recaptchaValid) {
+      console.error("❌ Invalid reCAPTCHA token!");
       return res.status(400).json({ message: "Invalid reCAPTCHA token" });
     }
+    console.log("✅ reCAPTCHA verification passed!");
 
-    // ✅ Get Access Token
+    // ✅ Prepare Contact Data for HubSpot
+    const contactData = {
+      firstname,
+      lastname,
+      email,
+      phone,
+      program_session: fixProgramTime(program_session),
+      program_time_2: fixProgramTime(program_time_2),
+      program_time_3: fixProgramTime(program_time_3),
+      intro_to_ai_program_date,
+      intro_to_ai_date_2,
+      intro_to_ai_date_3,
+      zip,
+    };
+
+    // ✅ Obtain Access Token
     const accessToken = await getValidAccessToken();
+    console.log("🔑 Using Access Token:", accessToken);
 
-    // ✅ Check if Contact Exists
+    // ✅ Check if Contact Exists in HubSpot
     const contactId = await getContactIdByEmail(email, accessToken);
 
     let hubspotResponse;
     if (contactId) {
+      // ✅ Update existing contact
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
         { properties: contactData },
-        { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          }
+        }
       );
+      console.log(`✅ Contact updated successfully: ${contactId}`);
     } else {
+      // ✅ Create new contact
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
         { properties: contactData },
-        { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          }
+        }
       );
+      console.log("✅ New contact created successfully!");
     }
 
     res.status(200).json({ message: "Contact successfully processed", data: hubspotResponse.data });
+
   } catch (error) {
     console.error("❌ Error processing form submission:", error.response?.data || error.message);
     res.status(500).json({
@@ -248,6 +287,7 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
     });
   }
 });
+
 
 
 
