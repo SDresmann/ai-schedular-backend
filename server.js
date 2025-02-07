@@ -192,6 +192,10 @@ const fixProgramTime = (time) => {
   return validTimes[time] || time;
 };
 
+function convertDateToTimestamp(date) {
+  return new Date(date).getTime(); // Convert date to Unix timestamp
+}
+
 // Route: Handle Form Submission
 app.post("/api/intro-to-ai-payment", async (req, res) => {
   console.log("🚀 Received Raw Request Body:", req.body);
