@@ -20,7 +20,7 @@ const corsOptions = {
 app.use(express.json()); // ✅ Ensure JSON body parsing
 app.use(express.urlencoded({ extended: true })); // ✅ Ensure URL-encoded parsing
 app.use(bodyParser.json());
-app.use(cors());
+app.use(cors(corsOptions));
 
 // Environment Variables
 const CLIENT_ID = process.env.CLIENT_ID;
