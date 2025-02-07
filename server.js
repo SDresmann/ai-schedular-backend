@@ -191,7 +191,11 @@ const fixProgramTime = (time) => {
   return validTimes[time] || time;
 };
 
-
+function convertDateToISO8601(date) {
+  if (!date) return null;
+  const formattedDate = new Date(date).toISOString(); // Converts to YYYY-MM-DDTHH:mm:ss.sTZD
+  return formattedDate;
+}
 
 // Route: Handle Form Submission
 app.post("/api/intro-to-ai-payment", async (req, res) => {
@@ -246,11 +250,12 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
       program_session: fixProgramTime(program_session),
       program_time_2: fixProgramTime(program_time_2),
       program_time_3: fixProgramTime(program_time_3),
-      intro_to_ai_program_date: convertDateToTimestamp(intro_to_ai_program_date),
-      intro_to_ai_date_2: convertDateToTimestamp(intro_to_ai_date_2),
-      intro_to_ai_date_3: convertDateToTimestamp(intro_to_ai_date_3),
-      zip
+      intro_to_ai_program_date: convertDateToISO8601(intro_to_ai_program_date),
+      intro_to_ai_date_2: convertDateToISO8601(intro_to_ai_date_2),
+      intro_to_ai_date_3: convertDateToISO8601(intro_to_ai_date_3),
+      zip,
     };
+    
 
     // ✅ Obtain Access Token
     const accessToken = await getValidAccessToken();
