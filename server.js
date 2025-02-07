@@ -174,6 +174,24 @@ async function getContactIdByEmail(email, accessToken) {
     throw error;
   }
 }
+// Function to Convert Date to UNIX Timestamp (Milliseconds)
+const convertDateToTimestamp = (dateString) => {
+  if (!dateString) return null; // Handle null values
+  return new Date(dateString).getTime();
+};
+
+// Function to Fix Program Time to Match HubSpot Allowed Values
+const fixProgramTime = (time) => {
+  const validTimes = {
+    "10am-1pm EST/9am-12pm CST": "10am-1pm EST",
+    "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM",
+    "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
+    "4pm-7pm EST": "4pm-7pm EST",
+  };
+  return validTimes[time] || time;
+};
+
+// Route: Handle Form Submission
 app.post("/api/intro-to-ai-payment", async (req, res) => {
   console.log("🚀 Received Raw Request Body:", req.body);
 
@@ -183,7 +201,7 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
     return res.status(400).json({ message: "Request body is empty or invalid" });
   }
 
-  // Extract fields from request body
+  // Destructure expected fields from request body
   const {
     firstname, lastname, email, phone, 
     program_session, program_time_2, program_time_3,
@@ -191,7 +209,7 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
     zip, recaptchaToken
   } = req.body;
 
-  // ✅ Ensure all required fields exist
+  // ✅ Required Fields Validation
   const requiredFields = [
     "firstname", "lastname", "email", "phone",
     "program_session", "program_time_2", "program_time_3",
@@ -207,17 +225,6 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
   }
 
   console.log("✅ All required fields received:", req.body);
-
-  // ✅ Function to fix program session values
-  const fixProgramTime = (timeValue) => {
-    const timeMap = {
-      "10am-1pm EST/9am-12pm CST": "10am-1pm EST/9am-12pm CST",
-      "2pm-5pm EST/1pm-4pm CST": "2pm-5pm EST/1pm-4pm CST",
-      "6pm-9pm EST/5pm-8pm CST": "6pm-9pm EST/5pm-8pm CST",
-      "4pm-7pm EST": "4pm-7pm EST"
-    };
-    return timeMap[timeValue] || timeValue; // Ensure correct value is sent
-  };
 
   try {
     // ✅ Verify reCAPTCHA Token
