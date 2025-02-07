@@ -176,10 +176,9 @@ async function getContactIdByEmail(email, accessToken) {
   }
 }
 // Function to Convert Date to UNIX Timestamp (Milliseconds)
-const convertDateToTimestamp = (dateString) => {
-  if (!dateString) return null; // Handle null values
-  return new Date(dateString).getTime();
-};
+function convertDateToTimestamp(date) {
+  return new Date(date).getTime(); // Convert date to Unix timestamp
+}
 
 // Function to Fix Program Time to Match HubSpot Allowed Values
 const fixProgramTime = (time) => {
@@ -192,9 +191,7 @@ const fixProgramTime = (time) => {
   return validTimes[time] || time;
 };
 
-function convertDateToTimestamp(date) {
-  return new Date(date).getTime(); // Convert date to Unix timestamp
-}
+
 
 // Route: Handle Form Submission
 app.post("/api/intro-to-ai-payment", async (req, res) => {
