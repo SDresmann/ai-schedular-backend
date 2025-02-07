@@ -22,6 +22,7 @@ app.use(express.urlencoded({ extended: true })); // ✅ Ensure URL-encoded parsi
 app.use(bodyParser.json());
 app.use(cors(corsOptions));
 
+app.options("*", cors(corsOptions)); 
 // Environment Variables
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
