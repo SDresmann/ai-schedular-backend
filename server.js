@@ -37,7 +37,7 @@ mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlPar
 mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
 
 // Function to Get Valid Access Token
-aasync function getValidAccessToken() {
+async function getValidAccessToken() {
   try {
     console.log("🔍 Checking MongoDB for stored token...");
 
