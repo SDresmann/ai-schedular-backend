@@ -255,7 +255,7 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
       intro_to_ai_date_3: convertDateToISO8601(intro_to_ai_date_3),
       zip,
     };
-    
+    console.log("🚀 Received Payload:", req.body);
 
     // ✅ Obtain Access Token
     const accessToken = await getValidAccessToken();
