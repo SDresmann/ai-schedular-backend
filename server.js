@@ -308,6 +308,35 @@ function convertDateToMidnightISO(date) {
   return moment(date, "YYYY/MM/DD").startOf("day").toISOString();
 }
 
+app.get('/auth/callback', async (req, res) => {
+  const { code } = req.query;
+
+  const response = await axios.post(
+    TOKEN_URL,
+    new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      redirect_uri: REDIRECT_URI,
+      code, // Authorization code from query string
+    }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+
+  const { access_token, refresh_token, expires_in } = response.data;
+
+  // Save the tokens to your database
+  const newToken = new Token({
+    accessToken: access_token,
+    refreshToken: refresh_token,
+    expiresAt: Date.now() + expires_in * 1000,
+  });
+
+  await newToken.save();
+  res.send('Authentication successful!');
+});
+
+
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   try {
     const {
