@@ -12,10 +12,12 @@ const Token = require('./models/token.models');
 const app = express();
 
 const corsOptions = {
-  origin: ["http://localhost:3000", "https://app.kableacademy.com"], // Frontend domains
-  methods: ["GET", "POST", "PATCH", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  origin: ["http://localhost:3000", "https://app.kableacademy.com"], // Allowed origins
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], // Allowed methods
+  allowedHeaders: ["Content-Type", "Authorization"], // Allowed headers
+  credentials: true, // If you need to send cookies or authentication headers
 };
+
 
 app.use(express.json()); // ✅ Ensure JSON body parsing
 app.use(express.urlencoded({ extended: true })); // ✅ Ensure URL-encoded parsing
