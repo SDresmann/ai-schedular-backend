@@ -319,33 +319,75 @@ function convertDateToMidnightISO(date) {
   return moment(date, "YYYY/MM/DD").startOf("day").toISOString();
 }
 
+app.get('/auth/hubspot', (req, res) => {
+  console.log('🔗 Redirecting to HubSpot Authorization URL:', AUTHORIZATION_URL);
+  res.redirect(AUTHORIZATION_URL);
+});
+
+// Handle Authorization Callback
 app.get('/auth/callback', async (req, res) => {
   const { code } = req.query;
+  if (!code) {
+    console.error('❌ Authorization code not provided');
+    return res.status(400).send('Authorization code is required');
+  }
 
-  const response = await axios.post(
-    TOKEN_URL,
-    new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      redirect_uri: REDIRECT_URI,
-      code, // Authorization code from query string
-    }),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-  );
+  try {
+    console.log('🔑 Exchanging authorization code for tokens...');
+    const response = await axios.post(
+      TOKEN_URL,
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI,
+        code,
+      }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
 
-  const { access_token, refresh_token, expires_in } = response.data;
+    const { access_token, refresh_token, expires_in } = response.data;
 
-  // Save the tokens to your database
-  const newToken = new Token({
-    accessToken: access_token,
-    refreshToken: refresh_token,
-    expiresAt: Date.now() + expires_in * 1000,
-  });
+    console.log('✅ Tokens received:', {
+      access_token,
+      refresh_token,
+      expires_in,
+    });
 
-  await newToken.save();
-  res.send('Authentication successful!');
+    // Save tokens in MongoDB
+    const token = new Token({
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresAt: Date.now() + expires_in * 1000, // Convert seconds to milliseconds
+    });
+
+    await token.save();
+    console.log('💾 Tokens saved to MongoDB');
+
+    res.send('Authorization successful! Tokens have been stored.');
+  } catch (error) {
+    console.error('❌ Error exchanging authorization code:', error.response?.data || error.message);
+    res.status(500).send('Failed to exchange authorization code');
+  }
 });
+
+// Route: Check if Tokens Exist
+app.get('/api/check-tokens', async (req, res) => {
+  try {
+    const token = await Token.findOne();
+    if (!token) {
+      return res.status(404).json({ message: 'No tokens found in the database' });
+    }
+    res.status(200).json({
+      message: 'Token exists',
+      token,
+    });
+  } catch (error) {
+    console.error('❌ Error checking tokens:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
 
 app.post('/api/intro-to-ai-payment', async (req, res) => {
