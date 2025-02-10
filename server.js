@@ -196,116 +196,130 @@ function convertDateToISO8601(date) {
   const formattedDate = new Date(date).toISOString(); // Converts to YYYY-MM-DDTHH:mm:ss.sTZD
   return formattedDate;
 }
-
+const validTimes = [
+  "10am-1pm EST/9am-12pm CST",
+  "2pm-5pm EST/1pm-4pm CST",
+  "6pm-9pm EST/5pm-8pm CST",
+  "4pm-7pm EST",
+];
 // Route: Handle Form Submission
-app.post("/api/intro-to-ai-payment", async (req, res) => {
-  console.log("🚀 Received Raw Request Body:", req.body);
+const express = require("express");
+const bodyParser = require("body-parser");
+const moment = require("moment");
 
-  // Check if request body is empty
-  if (!req.body || Object.keys(req.body).length === 0) {
-    console.error("❌ ERROR: Request body is empty or not parsed correctly!");
-    return res.status(400).json({ message: "Request body is empty or invalid" });
-  }
+const app = express();
+app.use(bodyParser.json());
 
-  // Destructure expected fields from request body
-  const {
-    firstname, lastname, email, phone, 
-    program_session, program_time_2, program_time_3,
-    intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
-    zip, recaptchaToken
-  } = req.body;
+const validTimes = [
+  "10am-1pm EST/9am-12pm CST",
+  "2pm-5pm EST/1pm-4pm CST",
+  "6pm-9pm EST/5pm-8pm CST",
+  "4pm-7pm EST",
+];
 
-  // ✅ Required Fields Validation
-  const requiredFields = [
-    "firstname", "lastname", "email", "phone",
-    "program_session", "program_time_2", "program_time_3",
-    "intro_to_ai_program_date", "intro_to_ai_date_2", "intro_to_ai_date_3",
-    "zip", "recaptchaToken"
-  ];
+// Helper function to validate dates and ensure they start at midnight UTC
+function convertDateToMidnightISO(date) {
+  if (!date) return null;
+  return moment(date, "YYYY/MM/DD").startOf("day").toISOString();
+}
 
-  const missingFields = requiredFields.filter(field => !req.body[field]);
-
-  if (missingFields.length > 0) {
-    console.error("❌ MISSING FIELDS:", missingFields);
-    return res.status(400).json({ message: "Missing required fields", missingFields });
-  }
-
-  console.log("✅ All required fields received:", req.body);
-
+app.post("/api/intro-to-ai-payment", (req, res) => {
   try {
-    // ✅ Verify reCAPTCHA Token
-    const recaptchaValid = await verifyRecaptcha(recaptchaToken);
-    if (!recaptchaValid) {
-      console.error("❌ Invalid reCAPTCHA token!");
-      return res.status(400).json({ message: "Invalid reCAPTCHA token" });
-    }
-    console.log("✅ reCAPTCHA verification passed!");
-
-    // ✅ Prepare Contact Data for HubSpot
-    const contactData = {
+    const {
       firstname,
       lastname,
       email,
       phone,
-      program_session: fixProgramTime(program_session),
-      program_time_2: fixProgramTime(program_time_2),
-      program_time_3: fixProgramTime(program_time_3),
-      intro_to_ai_program_date: convertDateToISO8601(intro_to_ai_program_date),
-      intro_to_ai_date_2: convertDateToISO8601(intro_to_ai_date_2),
-      intro_to_ai_date_3: convertDateToISO8601(intro_to_ai_date_3),
+      program_session,
+      program_time_2,
+      program_time_3,
+      intro_to_ai_program_date,
+      intro_to_ai_date_2,
+      intro_to_ai_date_3,
       zip,
-    };
-    console.log("🚀 Received Payload:", req.body);
-    if (!validTimes.includes(req.body.program_session)) {
-      return res.status(400).json({ error: "Invalid program_session value" });
+      recaptchaToken,
+    } = req.body;
+
+    // Validate required fields
+    let missingFields = [];
+    if (!firstname) missingFields.push("firstname");
+    if (!lastname) missingFields.push("lastname");
+    if (!email) missingFields.push("email");
+    if (!phone) missingFields.push("phone");
+    if (!zip) missingFields.push("zip");
+    if (!recaptchaToken) missingFields.push("recaptchaToken");
+
+    // Validate program times
+    if (!validTimes.includes(program_session)) {
+      missingFields.push("program_session");
     }
-    
-    // ✅ Obtain Access Token
-    const accessToken = await getValidAccessToken();
-    console.log("🔑 Using Access Token:", accessToken);
+    if (!validTimes.includes(program_time_2)) {
+      missingFields.push("program_time_2");
+    }
+    if (!validTimes.includes(program_time_3)) {
+      missingFields.push("program_time_3");
+    }
 
-    // ✅ Check if Contact Exists in HubSpot
-    const contactId = await getContactIdByEmail(email, accessToken);
-
-    let hubspotResponse;
-    if (contactId) {
-      // ✅ Update existing contact
-      hubspotResponse = await axios.patch(
-        `${HUBSPOT_API_URL}/${contactId}`,
-        { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          }
-        }
+    // Validate dates
+    let convertedDates = {};
+    if (intro_to_ai_program_date) {
+      convertedDates.intro_to_ai_program_date = convertDateToMidnightISO(
+        intro_to_ai_program_date
       );
-      console.log(`✅ Contact updated successfully: ${contactId}`);
     } else {
-      // ✅ Create new contact
-      hubspotResponse = await axios.post(
-        HUBSPOT_API_URL,
-        { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          }
-        }
-      );
-      console.log("✅ New contact created successfully!");
+      missingFields.push("intro_to_ai_program_date");
     }
 
-    res.status(200).json({ message: "Contact successfully processed", data: hubspotResponse.data });
+    if (intro_to_ai_date_2) {
+      convertedDates.intro_to_ai_date_2 = convertDateToMidnightISO(
+        intro_to_ai_date_2
+      );
+    } else {
+      missingFields.push("intro_to_ai_date_2");
+    }
 
+    if (intro_to_ai_date_3) {
+      convertedDates.intro_to_ai_date_3 = convertDateToMidnightISO(
+        intro_to_ai_date_3
+      );
+    } else {
+      missingFields.push("intro_to_ai_date_3");
+    }
+
+    // If there are missing or invalid fields, return an error response
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        error: "VALIDATION_ERROR",
+        message: "Missing or invalid fields",
+        missingFields,
+      });
+    }
+
+    // Mock processing and returning a success response
+    return res.status(200).json({
+      message: "Form submitted successfully!",
+      submittedData: {
+        firstname,
+        lastname,
+        email,
+        phone,
+        program_session,
+        program_time_2,
+        program_time_3,
+        ...convertedDates,
+        zip,
+        recaptchaToken,
+      },
+    });
   } catch (error) {
-    console.error("❌ Error processing form submission:", error.response?.data || error.message);
-    res.status(500).json({
-      message: "Error processing contact data",
-      error: error.response?.data || error.message
+    console.error("❌ Error processing form submission:", error);
+    return res.status(500).json({
+      error: "SERVER_ERROR",
+      message: "An internal error occurred while processing the request",
     });
   }
 });
+
 
 
 
