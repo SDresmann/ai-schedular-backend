@@ -40,29 +40,17 @@ mongoose.connection.once('open', () => console.log('MongoDB connected successful
 
 async function getValidAccessToken() {
   try {
-    console.log("🔍 Checking MongoDB for stored token...");
-
     const token = await Token.findOne();
     if (!token) {
-      console.error('❌ No tokens found in the database');
       throw new Error('No tokens found in the database');
     }
 
-    console.log('📅 Stored Token Expiry Time:', new Date(token.expiresAt));
-    console.log('⏰ Current Time:', new Date());
-    console.log('⌛ Checking if token is expired:', Date.now() > token.expiresAt);
-
-    // If the token is still valid, return it
     if (Date.now() < token.expiresAt) {
-      console.log('✅ Access token is still valid:', token.accessToken);
       return token.accessToken;
     }
 
-    // If the token is expired, refresh it
-    console.log('🔄 Access token expired, refreshing...');
-
     const response = await axios.post(
-      'https://api.hubapi.com/oauth/v1/token',
+      TOKEN_URL,
       new URLSearchParams({
         grant_type: 'refresh_token',
         client_id: process.env.CLIENT_ID,
@@ -72,23 +60,14 @@ async function getValidAccessToken() {
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
 
-    if (!response.data.access_token) {
-      console.error('❌ HubSpot did not return a new access token!');
-      throw new Error('HubSpot refresh failed: No new access token');
-    }
-
-    // Update token in database
     token.accessToken = response.data.access_token;
-    token.refreshToken = response.data.refresh_token || token.refreshToken; // Keep old refresh token if none is provided
-    token.expiresAt = Date.now() + response.data.expires_in * 1000; // Convert seconds to milliseconds
-
+    token.refreshToken = response.data.refresh_token || token.refreshToken;
+    token.expiresAt = Date.now() + response.data.expires_in * 1000;
     await token.save();
-    console.log('💾 New Access Token Saved to Database');
-    console.log('✅ New Access Token:', token.accessToken);
 
     return token.accessToken;
   } catch (error) {
-    console.error('❌ Error refreshing access token:', error.response?.data || error.message);
+    console.error('Error refreshing access token:', error.response?.data || error.message);
     throw new Error('Failed to refresh access token');
   }
 }
