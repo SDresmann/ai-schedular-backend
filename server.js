@@ -91,6 +91,61 @@ async function getValidAccessToken() {
     throw new Error('Failed to refresh access token');
   }
 }
+async function getHubSpotAccessToken() {
+  try {
+    const response = await axios.post('https://api.hubapi.com/oauth/v1/token', new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: process.env.CLIENT_ID, 
+      client_secret: process.env.CLIENT_SECRET,
+    }), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+
+    return response.data.access_token;
+  } catch (error) {
+    console.error('❌ Error getting access token:', error.response ? error.response.data : error.message);
+    throw new Error('Failed to retrieve HubSpot access token');
+  }
+}
+
+async function sendToHubSpot(formData) {
+  try {
+    const accessToken = await getHubSpotAccessToken(); // Get OAuth token
+
+    const hubspotData = {
+      properties: {
+        firstname: formData.firstname,
+        lastname: formData.lastname,
+        email: formData.email,
+        phone: formData.phone,
+        zip: formData.zip,
+        program_session: formData.program_session, // ✅ Ensure correct field names
+        program_time_2: formData.program_time_2,
+        program_time_3: formData.program_time_3,
+        intro_to_ai_program_date: formData.intro_to_ai_program_date,
+        intro_to_ai_date_2: formData.intro_to_ai_date_2,
+        intro_to_ai_date_3: formData.intro_to_ai_date_3,
+      },
+    };
+
+    console.log('📤 Sending data to HubSpot:', JSON.stringify(hubspotData, null, 2));
+
+    const response = await axios.post(HUBSPOT_API_URL, hubspotData, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`, // 🔑 Use OAuth token
+      },
+    });
+
+    console.log('✅ Successfully updated HubSpot:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ HubSpot API Error:', error.response ? error.response.data : error.message);
+    throw new Error('Failed to update HubSpot contact');
+  }
+}
+
+
 async function verifyRecaptcha(recaptchaToken) {
   const secretKey = process.env.SECRET_KEY; // Your reCAPTCHA secret key
 
@@ -174,27 +229,6 @@ async function getContactIdByEmail(email, accessToken) {
     console.error('Error fetching contact ID:', error.response?.data || error.message);
     throw error;
   }
-}
-// Function to Convert Date to UNIX Timestamp (Milliseconds)
-function convertDateToTimestamp(date) {
-  return new Date(date).getTime(); // Convert date to Unix timestamp
-}
-
-// Function to Fix Program Time to Match HubSpot Allowed Values
-const fixProgramTime = (time) => {
-  const validTimes = {
-    "10am-1pm EST/9am-12pm CST": "10am-1pm EST",
-    "2pm-5pm EST/1pm-4pm CST": "2:00PM - 500PM",
-    "6pm-9pm EST/5pm-8pm CST": "6:00PM - 9PM",
-    "4pm-7pm EST": "4pm-7pm EST",
-  };
-  return validTimes[time] || time;
-};
-
-function convertDateToISO8601(date) {
-  if (!date) return null;
-  const formattedDate = new Date(date).toISOString(); // Converts to YYYY-MM-DDTHH:mm:ss.sTZD
-  return formattedDate;
 }
 
 // Route: Handle Form Submission
