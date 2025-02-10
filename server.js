@@ -145,6 +145,74 @@ async function sendToHubSpot(formData) {
   }
 }
 
+async function findHubSpotContactId(email, accessToken) {
+  try {
+    const searchUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/search';
+    const response = await axios.post(
+      searchUrl,
+      {
+        filterGroups: [
+          {
+            filters: [{ propertyName: 'email', operator: 'EQ', value: email }],
+          },
+        ],
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (response.data.total > 0) {
+      return response.data.results[0].id; // ✅ Return the first matching contact ID
+    } else {
+      return null; // No contact found
+    }
+  } catch (error) {
+    console.error('❌ Error finding HubSpot contact:', error.response?.data || error.message);
+    throw new Error('Failed to find contact in HubSpot');
+  }
+}
+
+async function updateHubSpotContact(contactId, formData, accessToken) {
+  try {
+    const updateUrl = `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`;
+
+    const hubspotData = {
+      properties: {
+        firstname: formData.firstname,
+        lastname: formData.lastname,
+        email: formData.email,
+        phone: formData.phone,
+        zip: formData.zip,
+        program_session: formData.program_session,
+        program_time_2: formData.program_time_2,
+        program_time_3: formData.program_time_3,
+        intro_to_ai_program_date: formData.intro_to_ai_program_date,
+        intro_to_ai_date_2: formData.intro_to_ai_date_2,
+        intro_to_ai_date_3: formData.intro_to_ai_date_3,
+      },
+    };
+
+    console.log('📤 Updating HubSpot Contact:', JSON.stringify(hubspotData, null, 2));
+
+    const response = await axios.patch(updateUrl, hubspotData, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    console.log('✅ HubSpot Contact Updated:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error updating HubSpot contact:', error.response?.data || error.message);
+    throw new Error('Failed to update contact in HubSpot');
+  }
+}
+
 
 async function verifyRecaptcha(recaptchaToken) {
   const secretKey = process.env.SECRET_KEY; // Your reCAPTCHA secret key
@@ -246,7 +314,7 @@ function convertDateToMidnightISO(date) {
   return moment(date, "YYYY/MM/DD").startOf("day").toISOString();
 }
 
-app.post("/api/intro-to-ai-payment", (req, res) => {
+app.post('/api/intro-to-ai-payment', async (req, res) => {
   try {
     const {
       firstname,
@@ -263,85 +331,79 @@ app.post("/api/intro-to-ai-payment", (req, res) => {
       recaptchaToken,
     } = req.body;
 
-    // Validate required fields
+    console.log("📩 Received form submission:", req.body);
+
+    // ✅ Convert Dates to Midnight ISO format
+    const convertedProgramDate = convertDateToMidnightISO(intro_to_ai_program_date);
+    const convertedDate2 = convertDateToMidnightISO(intro_to_ai_date_2);
+    const convertedDate3 = convertDateToMidnightISO(intro_to_ai_date_3);
+
+    console.log("✅ Converted Dates:", {
+      intro_to_ai_program_date: convertedProgramDate,
+      intro_to_ai_date_2: convertedDate2,
+      intro_to_ai_date_3: convertedDate3
+    });
+
+    // ✅ Check Required Fields
     let missingFields = [];
-    if (!firstname) missingFields.push("firstname");
-    if (!lastname) missingFields.push("lastname");
-    if (!email) missingFields.push("email");
-    if (!phone) missingFields.push("phone");
-    if (!zip) missingFields.push("zip");
-    if (!recaptchaToken) missingFields.push("recaptchaToken");
+    if (!firstname) missingFields.push('firstname');
+    if (!lastname) missingFields.push('lastname');
+    if (!email) missingFields.push('email');
+    if (!phone) missingFields.push('phone');
+    if (!zip) missingFields.push('zip');
+    if (!program_session) missingFields.push('program_session');
+    if (!program_time_2) missingFields.push('program_time_2');
+    if (!program_time_3) missingFields.push('program_time_3');
+    if (!convertedProgramDate) missingFields.push('intro_to_ai_program_date');
+    if (!convertedDate2) missingFields.push('intro_to_ai_date_2');
+    if (!convertedDate3) missingFields.push('intro_to_ai_date_3');
 
-    // Validate program times
-    if (!validTimes.includes(program_session)) {
-      missingFields.push("program_session");
-    }
-    if (!validTimes.includes(program_time_2)) {
-      missingFields.push("program_time_2");
-    }
-    if (!validTimes.includes(program_time_3)) {
-      missingFields.push("program_time_3");
-    }
-
-    // Validate dates
-    let convertedDates = {};
-    if (intro_to_ai_program_date) {
-      convertedDates.intro_to_ai_program_date = convertDateToMidnightISO(
-        intro_to_ai_program_date
-      );
-    } else {
-      missingFields.push("intro_to_ai_program_date");
-    }
-
-    if (intro_to_ai_date_2) {
-      convertedDates.intro_to_ai_date_2 = convertDateToMidnightISO(
-        intro_to_ai_date_2
-      );
-    } else {
-      missingFields.push("intro_to_ai_date_2");
-    }
-
-    if (intro_to_ai_date_3) {
-      convertedDates.intro_to_ai_date_3 = convertDateToMidnightISO(
-        intro_to_ai_date_3
-      );
-    } else {
-      missingFields.push("intro_to_ai_date_3");
-    }
-
-    // If there are missing or invalid fields, return an error response
     if (missingFields.length > 0) {
-      return res.status(400).json({
-        error: "VALIDATION_ERROR",
-        message: "Missing or invalid fields",
-        missingFields,
-      });
+      console.error("❌ Missing fields:", missingFields);
+      return res.status(400).json({ error: 'VALIDATION_ERROR', missingFields });
     }
 
-    // Mock processing and returning a success response
-    return res.status(200).json({
-      message: "Form submitted successfully!",
-      submittedData: {
-        firstname,
-        lastname,
-        email,
-        phone,
-        program_session,
-        program_time_2,
-        program_time_3,
-        ...convertedDates,
-        zip,
-        recaptchaToken,
-      },
-    });
+    // ✅ Step 1: Get HubSpot Access Token
+    console.log("🔑 Getting HubSpot access token...");
+    const accessToken = await getHubSpotAccessToken();
+
+    // ✅ Step 2: Search for Contact by Email
+    console.log("🔍 Searching for HubSpot Contact...");
+    const contactId = await findHubSpotContactId(email, accessToken);
+
+    // ✅ Step 3: Prepare Data for Update
+    const formData = {
+      firstname,
+      lastname,
+      email,
+      phone,
+      zip,
+      program_session,
+      program_time_2,
+      program_time_3,
+      intro_to_ai_program_date: convertedProgramDate,
+      intro_to_ai_date_2: convertedDate2,
+      intro_to_ai_date_3: convertedDate3,
+    };
+
+    console.log("📤 Preparing data to send:", formData);
+
+    // ✅ Step 4: Update or Create Contact in HubSpot
+    if (!contactId) {
+      console.log("📩 Contact does not exist. Creating new contact...");
+      const hubspotResponse = await sendToHubSpot(formData);
+      return res.status(201).json({ message: "New contact created", hubspotResponse });
+    } else {
+      console.log(`🔄 Contact found (ID: ${contactId}), updating existing contact...`);
+      const hubspotResponse = await updateHubSpotContact(contactId, formData, accessToken);
+      return res.status(200).json({ message: "Contact updated", hubspotResponse });
+    }
   } catch (error) {
-    console.error("❌ Error processing form submission:", error);
-    return res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "An internal error occurred while processing the request",
-    });
+    console.error("❌ Server Error:", error);
+    return res.status(500).json({ error: 'SERVER_ERROR', message: error.message });
   }
 });
+
 
 
 
@@ -352,7 +414,7 @@ app.patch("/api/update-contact", async (req, res) => {
   console.log("🚀 Received PATCH Request Body:", req.body);
 
   try {
-    // Destructure expected fields
+    // ✅ Destructure expected fields
     const {
       firstname, lastname, email, phone,
       program_session, program_time_2, program_time_3,
@@ -360,11 +422,22 @@ app.patch("/api/update-contact", async (req, res) => {
       zip, recaptchaToken
     } = req.body;
 
-    console.log("🔍 Extracted Data:", {
+    console.log("🔍 Extracted Data Before Conversion:", {
       firstname, lastname, email, phone,
       program_session, program_time_2, program_time_3,
       intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
       zip, recaptchaToken
+    });
+
+    // ✅ Convert Dates to Midnight ISO format before updating
+    const convertedProgramDate = convertDateToMidnightISO(intro_to_ai_program_date);
+    const convertedDate2 = convertDateToMidnightISO(intro_to_ai_date_2);
+    const convertedDate3 = convertDateToMidnightISO(intro_to_ai_date_3);
+
+    console.log("✅ Converted Dates for HubSpot:", {
+      intro_to_ai_program_date: convertedProgramDate,
+      intro_to_ai_date_2: convertedDate2,
+      intro_to_ai_date_3: convertedDate3
     });
 
     // ✅ Verify reCAPTCHA
@@ -393,7 +466,9 @@ app.patch("/api/update-contact", async (req, res) => {
       properties: {
         firstname, lastname, email, phone,
         program_session, program_time_2, program_time_3,
-        intro_to_ai_program_date, intro_to_ai_date_2, intro_to_ai_date_3,
+        intro_to_ai_program_date: convertedProgramDate,
+        intro_to_ai_date_2: convertedDate2,
+        intro_to_ai_date_3: convertedDate3,
         zip
       }
     };
@@ -421,6 +496,7 @@ app.patch("/api/update-contact", async (req, res) => {
     res.status(500).json({ message: "Error updating contact", error: error.response?.data || error.message });
   }
 });
+
 
 
 
