@@ -256,7 +256,10 @@ app.post("/api/intro-to-ai-payment", async (req, res) => {
       zip,
     };
     console.log("🚀 Received Payload:", req.body);
-
+    if (!validTimes.includes(req.body.program_session)) {
+      return res.status(400).json({ error: "Invalid program_session value" });
+    }
+    
     // ✅ Obtain Access Token
     const accessToken = await getValidAccessToken();
     console.log("🔑 Using Access Token:", accessToken);
