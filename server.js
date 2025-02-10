@@ -44,19 +44,28 @@ async function getValidAccessToken() {
   try {
     const token = await Token.findOne();
     if (!token) {
-      throw new Error('No tokens found in the database');
+      console.error('❌ No token found in the database');
+      throw new Error('No tokens stored in MongoDB');
     }
 
+    console.log('📅 Token Info:', {
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      expiresAt: new Date(token.expiresAt),
+    });
+
     if (Date.now() < token.expiresAt) {
+      console.log('✅ Using existing valid access token');
       return token.accessToken;
     }
 
+    console.log('🔄 Token expired, refreshing...');
     const response = await axios.post(
       TOKEN_URL,
       new URLSearchParams({
         grant_type: 'refresh_token',
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
         refresh_token: token.refreshToken,
       }),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
@@ -67,12 +76,14 @@ async function getValidAccessToken() {
     token.expiresAt = Date.now() + response.data.expires_in * 1000;
     await token.save();
 
+    console.log('✅ Token refreshed and saved');
     return token.accessToken;
   } catch (error) {
-    console.error('Error refreshing access token:', error.response?.data || error.message);
-    throw new Error('Failed to refresh access token');
+    console.error('❌ Error in getValidAccessToken:', error.message);
+    throw error;
   }
 }
+
 
 
 async function getHubSpotAccessToken() {
