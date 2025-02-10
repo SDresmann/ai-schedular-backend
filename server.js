@@ -37,53 +37,32 @@ mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlPar
 mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
 
 // Function to Get Valid Access Token
-async function getValidAccessToken() {
+async function getHubSpotAccessToken() {
   try {
-    console.log("🔍 Checking MongoDB for stored token...");
-
-    const token = await Token.findOne();
-    if (!token) {
-      console.error("❌ No tokens found in the database");
-      throw new Error("No tokens found in the database");
-    }
-
-    console.log("📅 Token Expiry Time:", token.expiresAt);
-    if (Date.now() < token.expiresAt) {
-      console.log("✅ Using valid access token:", token.accessToken);
-      return token.accessToken;
-    }
-
-    console.log("🔄 Token expired, refreshing...");
+    console.log("🔑 Refreshing HubSpot access token...");
     const response = await axios.post(
-      TOKEN_URL,
+      'https://api.hubapi.com/oauth/v1/token',
       new URLSearchParams({
-        grant_type: "refresh_token",
+        grant_type: 'refresh_token', // Ensure correct grant type
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
-        refresh_token: token.refreshToken,
+        refresh_token: token.refreshToken, // Pass the stored refresh token
       }),
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }
     );
 
-    console.log("✅ Refresh response:", response.data);
+    console.log("✅ New Access Token Response:", response.data);
 
-    if (!response.data.access_token) {
-      throw new Error("Failed to refresh token");
-    }
-
-    token.accessToken = response.data.access_token;
-    token.refreshToken = response.data.refresh_token || token.refreshToken;
-    token.expiresAt = Date.now() + response.data.expires_in * 1000;
-
-    await token.save();
-    console.log("✅ Updated token saved to DB:", token.accessToken);
-
-    return token.accessToken;
+    // Update token in database (if needed)
+    return response.data.access_token;
   } catch (error) {
-    console.error("❌ Token retrieval error:", error.message, error.response?.data);
-    throw new Error("Failed to retrieve HubSpot access token");
+    console.error("❌ Error refreshing access token:", error.response?.data || error.message);
+    throw new Error('Failed to retrieve HubSpot access token');
   }
 }
+
 
 async function getHubSpotAccessToken() {
   try {
