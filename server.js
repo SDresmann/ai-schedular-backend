@@ -196,19 +196,8 @@ function convertDateToISO8601(date) {
   const formattedDate = new Date(date).toISOString(); // Converts to YYYY-MM-DDTHH:mm:ss.sTZD
   return formattedDate;
 }
-const validTimes = [
-  "10am-1pm EST/9am-12pm CST",
-  "2pm-5pm EST/1pm-4pm CST",
-  "6pm-9pm EST/5pm-8pm CST",
-  "4pm-7pm EST",
-];
-// Route: Handle Form Submission
-const express = require("express");
-const bodyParser = require("body-parser");
-const moment = require("moment");
 
-const app = express();
-app.use(bodyParser.json());
+// Route: Handle Form Submission
 
 const validTimes = [
   "10am-1pm EST/9am-12pm CST",
