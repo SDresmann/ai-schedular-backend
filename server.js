@@ -29,7 +29,7 @@ app.options("*", cors(corsOptions));
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5000/auth/callback';
-const AUTHORIZATION_URL = 'https://app.hubspot.com/oauth/authorize';
+const AUTHORIZATION_URL = `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=contacts%20oauth`;
 const TOKEN_URL = 'https://api.hubapi.com/oauth/v1/token';
 const HUBSPOT_API_URL = 'https://api.hubapi.com/crm/v3/objects/contacts';
 const RECAPTCHA_SECRET_KEY = process.env.SECRET_KEY;
