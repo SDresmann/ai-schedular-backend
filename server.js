@@ -93,6 +93,7 @@ async function getValidAccessToken() {
   }
 }
 
+
 async function getHubSpotAccessToken() {
   try {
     console.log("🔑 Refreshing HubSpot access token...");
