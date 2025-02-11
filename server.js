@@ -20,6 +20,10 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
+axios.interceptors.request.use((config) => {
+  console.log(`Making request to ${config.url}`);
+  return config;
+});
 
 // Environment Variables
 const CLIENT_ID = process.env.CLIENT_ID;
