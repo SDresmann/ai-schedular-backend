@@ -182,7 +182,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     const contactData = {
       firstname: firstName,
       lastname: lastName,
-      email,
+      email: email,
       phone: phoneNumber,
       program_session: time,
       program_time_2: time2,
@@ -192,7 +192,19 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
       zip: postal,
     };
-    console.log('🚀 Contact Data Prepared:', contactData);
+    
+    console.log("Final Contact Data:", contactData);
+    
+    hubspotResponse = await axios.patch(
+      `${HUBSPOT_API_URL}/${contactId}`,
+      { properties: { ...contactData } }, // Flatten payload
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
     // Obtain access token
     const accessToken = await getValidAccessToken();
