@@ -135,8 +135,8 @@ async function getContactIdByEmail(email, accessToken) {
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  console.log('🚀 Incoming request body:', req.body);
   const { firstName, lastName, email, phoneNumber, time, time2, time3, classDate, classDate2, classDate3, postal, recaptchaToken,  } = req.body;
+  console.log('🚀 Incoming request body:', req.body);
   console.log('Received Request Body:', req.body);
   console.log("Contact Data Sent to HubSpot:", {
     program_session: time,
