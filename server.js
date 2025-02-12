@@ -132,27 +132,51 @@ async function getContactIdByEmail(email, accessToken) {
     throw error;
   }
 }
+async function getUpdatedContact(contactId, accessToken) {
+  try {
+    const response = await axios.get(
+      `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        params: {
+          properties: ['program_session', 'program_time_2', 'program_time_3', 'intro_to_ai_program_date'],
+        },
+      }
+    );
+    console.log('🚀 Retrieved Contact Data:', response.data.properties);
+  } catch (error) {
+    console.error('❌ Error Retrieving Updated Contact:', error.response?.data || error.message);
+  }
+}
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   console.log('🚀 Incoming request body:', req.body);
-  const { firstName, lastName, email, phoneNumber, time, time2, time3, classDate, classDate2, classDate3, postal, recaptchaToken,  } = req.body;
-  console.log('🚀 Incoming request body:', req.body);
-  console.log('Received Request Body:', req.body);
-  console.log("Contact Data Sent to HubSpot:", {
-    program_session: time,
-    program_time_2: time2,
-    program_time_3: time3,
-  });
-  
+  const {
+    firstName,
+    lastName,
+    email,
+    phoneNumber,
+    time,
+    time2,
+    time3,
+    classDate,
+    classDate2,
+    classDate3,
+    postal,
+    recaptchaToken,
+  } = req.body;
+
   try {
     // Verify reCAPTCHA token
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
     if (!recaptchaValid) {
-      console.error('Invalid reCAPTCHA token');
+      console.error('❌ Invalid reCAPTCHA token');
       return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
     }
-    console.log('reCAPTCHA validation passed.');
+    console.log('✅ reCAPTCHA validation passed.');
 
     // Prepare contact data
     const contactData = {
@@ -168,13 +192,18 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
       zip: postal,
     };
+    console.log('🚀 Contact Data Prepared:', contactData);
 
-    // Obtain access token and handle contact creation/updating
+    // Obtain access token
     const accessToken = await getValidAccessToken();
+
+    // Get contact ID
     const contactId = await getContactIdByEmail(email, accessToken);
 
     let hubspotResponse;
     if (contactId) {
+      // Update contact if exists
+      console.log('🔄 Updating contact in HubSpot...');
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
         { properties: contactData },
@@ -185,7 +214,13 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
           },
         }
       );
+      console.log('✅ Contact updated in HubSpot:', hubspotResponse.data);
+
+      // Fetch updated contact data
+      await getUpdatedContact(contactId, accessToken);
     } else {
+      // Create new contact if it doesn't exist
+      console.log('🆕 Creating new contact in HubSpot...');
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
         { properties: contactData },
@@ -196,7 +231,22 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
           },
         }
       );
+      console.log('✅ Contact created in HubSpot:', hubspotResponse.data);
+
+      // Fetch newly created contact data
+      await getUpdatedContact(hubspotResponse.data.id, accessToken);
     }
+
+    res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
+  } catch (error) {
+    console.error('❌ Error processing contact:', error.response?.data || error.message);
+    res.status(500).send({
+      message: 'Error processing contact data',
+      error: error.response?.data || error.message,
+    });
+  }
+});
+
 
     res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
