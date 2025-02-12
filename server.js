@@ -16,7 +16,6 @@ const corsOptions = {
   credentials: true, // If you need to send cookies or authentication headers
   methods: ['GET', 'POST', 'PATCH', 'DELETE'], // Allowed HTTP methods
   allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
-  credentials: true, // Allow cookies or authentication headers
 };
 
 app.use(cors(corsOptions));
