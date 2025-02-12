@@ -18,8 +18,8 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
 };
 
-app.use(cors(corsOptions));
 app.use(bodyParser.json());
+app.use(cors(corsOptions));
 axios.interceptors.request.use((config) => {
   console.log(`Making request to ${config.url}`);
   return config;
