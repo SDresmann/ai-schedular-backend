@@ -137,7 +137,12 @@ async function getContactIdByEmail(email, accessToken) {
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   const { firstName, lastName, email, phoneNumber, time, time2, time3, classDate, classDate2, classDate3, postal, recaptchaToken,  } = req.body;
   console.log('Received Request Body:', req.body);
-
+  console.log("Contact Data Sent to HubSpot:", {
+    program_session: time,
+    program_time_2: time2,
+    program_time_3: time3,
+  });
+  
   try {
     // Verify reCAPTCHA token
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
