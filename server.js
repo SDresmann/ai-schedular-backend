@@ -248,16 +248,6 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
 });
 
 
-    res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
-  } catch (error) {
-    console.error('Error processing form submission:', error.response?.data || error.message);
-    res.status(500).send({
-      message: 'Error processing contact data',
-      error: error.response?.data || error.message,
-    });
-  }
-});
-
 // Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
