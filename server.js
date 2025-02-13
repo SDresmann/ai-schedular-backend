@@ -10,18 +10,21 @@ require('dotenv').config();
 const Token = require('./models/token.models');
 
 const app = express();
-
+app.use(bodyParser.json());
 const corsOptions = {
-  origin: 'https://app.kableacademy.com', // Allow only your frontend origin
-  methods: ['GET', 'POST', 'PATCH', 'DELETE'], // Allowed HTTP methods
-  allowedHeaders: ['Content-Type', 'Authorization'], // Headers that can be sent from the frontend
-  credentials: true, // Allow cookies or credentials if needed
+  origin: (origin, callback) => {
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 };
 
-app.use(cors(corsOptions));
 
-
-app.use(bodyParser.json());
 app.use(cors(corsOptions));
 axios.interceptors.request.use((config) => {
   console.log(`Making request to ${config.url}`);
