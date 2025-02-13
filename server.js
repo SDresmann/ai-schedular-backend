@@ -13,8 +13,7 @@ const app = express();
 
 const corsOptions = {
   origin: '*', // Add both local and production origins
-  credentials: true, // If you need to send cookies or authentication headers
-  methods: ['GET', 'POST', 'PATCH', 'DELETE'], // Allowed HTTP methods
+  methods: ['GET', 'POST', 'PATCH', 'PUT'], // Allowed HTTP methods
   allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
 };
 
