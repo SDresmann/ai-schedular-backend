@@ -12,7 +12,7 @@ const Token = require('./models/token.models');
 const app = express();
 
 const corsOptions = {
-  origin: '*', // Add both local and production origins
+  origin: 'https://ai-schedular-backend.onrender.com', // Add both local and production origins
   methods: ['GET', 'POST', 'PATCH', 'PUT'], // Allowed HTTP methods
   allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
 };
