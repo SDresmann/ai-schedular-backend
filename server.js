@@ -146,6 +146,8 @@ async function getContactIdByEmail(email, accessToken) {
 
 
 async function getUpdatedContact(contactId, accessToken) {
+  console.log("🔍 Payload sent to HubSpot:", JSON.stringify({ properties: contactData }, null, 2));
+
   try {
     const response = await axios.get(
       `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
