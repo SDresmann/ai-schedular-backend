@@ -193,19 +193,24 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       zip: postal,
     };
     
+    
     console.log("Final Contact Data:", contactData);
     
-    hubspotResponse = await axios.patch(
-      `${HUBSPOT_API_URL}/${contactId}`,
-      { properties: { ...contactData } }, // Flatten payload
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
+    try {
+      const hubspotResponse = await axios.patch(
+        `${HUBSPOT_API_URL}/${contactId}`,
+        { properties: contactData }, // Ensure this is wrapped in "properties"
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log("HubSpot PATCH Response:", hubspotResponse.data);
+    } catch (error) {
+      console.error("Error in PATCH request:", error.response?.data || error.message);
+    }
     // Obtain access token
     const accessToken = await getValidAccessToken();
 
