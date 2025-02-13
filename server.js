@@ -119,7 +119,7 @@ async function getContactIdByEmail(email, accessToken) {
             ],
           },
         ],
-        properties: ['email'],
+        properties: ['email', 'program_session', 'program_time_2', 'program_time_3'], // Include properties you want to retrieve
       },
       {
         headers: {
@@ -133,12 +133,13 @@ async function getContactIdByEmail(email, accessToken) {
       return null;
     }
 
-    return response.data.results[0].id;
+    return response.data.results[0];
   } catch (error) {
     console.error('Error fetching contact ID:', error.response?.data || error.message);
     throw error;
   }
 }
+
 async function getUpdatedContact(contactId, accessToken) {
   try {
     const response = await axios.get(
