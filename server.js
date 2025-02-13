@@ -45,6 +45,7 @@ const RECAPTCHA_SECRET_KEY = process.env.SECRET_KEY;
 mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlParser: true });
 mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
 
+
 // Function to Get Valid Access Token
 async function getValidAccessToken() {
   const token = await Token.findOne();
@@ -119,7 +120,7 @@ async function getContactIdByEmail(email, accessToken) {
             ],
           },
         ],
-        properties: ['email', 'program_session', 'program_time_2', 'program_time_3'], // Include properties you want to retrieve
+        properties: ['email'],
       },
       {
         headers: {
@@ -129,16 +130,20 @@ async function getContactIdByEmail(email, accessToken) {
       }
     );
 
+    console.log('HubSpot Search Response:', response.data); // Log full response
+
     if (response.data.results.length === 0) {
+      console.error('No contact found for email:', email);
       return null;
     }
 
-    return response.data.results[0];
+    return response.data.results[0].id; // Ensure this returns a valid ID
   } catch (error) {
     console.error('Error fetching contact ID:', error.response?.data || error.message);
     throw error;
   }
 }
+
 
 async function getUpdatedContact(contactId, accessToken) {
   try {
@@ -158,6 +163,55 @@ async function getUpdatedContact(contactId, accessToken) {
     console.error('❌ Error Retrieving Updated Contact:', error.response?.data || error.message);
   }
 }
+
+app.get('/auth', (req, res) => {
+  const authUrl = `${AUTHORIZATION_URL}?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=crm.objects.contacts.read%20crm.objects.contacts.write&response_type=code`;
+  console.log('Redirecting to HubSpot Authorization URL:', authUrl);
+  res.redirect(authUrl);
+});
+// Route: Handle OAuth Callback
+app.get('/auth/callback', async (req, res) => {
+  const authorizationCode = req.query.code;
+
+  if (!authorizationCode) {
+    return res.status(400).send({ message: 'Authorization code missing' });
+  }
+
+  try {
+    const tokenResponse = await axios.post(
+      TOKEN_URL,
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI,
+        code: authorizationCode,
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }
+    );
+
+    const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+    // Save tokens to the database
+    const token = await Token.findOneAndUpdate(
+      {},
+      {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: Date.now() + expires_in * 1000,
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log('Tokens saved to database:', token);
+    res.status(200).send({ message: 'Authorization successful!' });
+  } catch (error) {
+    console.error('Error exchanging authorization code:', error.response?.data || error.message);
+    res.status(500).send({ message: 'Error exchanging authorization code' });
+  }
+});
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
