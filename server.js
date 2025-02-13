@@ -11,6 +11,7 @@ const Token = require('./models/token.models');
 
 const app = express();
 app.use(bodyParser.json());
+const allowedOrigins = ['https://app.kableacademy.com', 'http://localhost:3000'];
 const corsOptions = {
   origin: (origin, callback) => {
     if (allowedOrigins.includes(origin) || !origin) {
