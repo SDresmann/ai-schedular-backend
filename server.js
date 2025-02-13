@@ -12,10 +12,14 @@ const Token = require('./models/token.models');
 const app = express();
 
 const corsOptions = {
-  origin: 'https://ai-schedular-backend.onrender.com', // Add both local and production origins
-  methods: ['GET', 'POST', 'PATCH', 'PUT'], // Allowed HTTP methods
-  allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
+  origin: 'https://app.kableacademy.com', // Allow only your frontend origin
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'], // Allowed HTTP methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Headers that can be sent from the frontend
+  credentials: true, // Allow cookies or credentials if needed
 };
+
+app.use(cors(corsOptions));
+
 
 app.use(bodyParser.json());
 app.use(cors(corsOptions));
