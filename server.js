@@ -240,6 +240,21 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
       zip: postal,
     };
+    console.log("📤 Sending this data to HubSpot:", JSON.stringify({
+      properties: {
+        firstname: firstName,
+        lastname: lastName,
+        email: email,
+        phone: phoneNumber,
+        program_session: time,
+        program_time_2: time2,
+        program_time_3: time3,
+        intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
+        intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
+        intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
+        zip: postal,
+      }
+    }, null, 2));
 
     let hubspotResponse;
     if (contactId) {
