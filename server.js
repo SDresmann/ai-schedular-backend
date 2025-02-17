@@ -259,17 +259,17 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     let hubspotResponse;
 
     const contactProperties = {
-      hs_firstname: firstName || null,
-      hs_lastname: lastName || null,
-      hs_email: email || null,
-      hs_phone: phoneNumber || null,
-      hs_program_session: time || null,
-      hs_program_time_2: time2 || null,
-      hs_program_time_3: time3 || null,
-      hs_intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
-      hs_intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
-      hs_intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
-      hs_zip: postal || null
+      firstname: firstName || null,
+      lastname: lastName || null,
+      email: email || null,
+      phone: phoneNumber || null,
+      program_session: time || null,
+      program_time_2: time2 || null,
+      program_time_3: time3 || null,
+      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
+      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
+      intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
+      zip: postal || null
     };
     
   
