@@ -259,18 +259,19 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     let hubspotResponse;
 
     const contactProperties = {
-      ...(firstName && { firstname: firstName }),
-      ...(lastName && { lastname: lastName }),
-      ...(email && { email: email }),
-      ...(phoneNumber && { phone: phoneNumber }),
-      ...(time && { program_session: time }),
-      ...(time2 && { program_time_2: time2 }),
-      ...(time3 && { program_time_3: time3 }),
-      ...(classDate && { intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').toISOString() }),
-      ...(classDate2 && { intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').toISOString() }),
-      ...(classDate3 && { intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').toISOString() }),
-      ...(postal && { zip: postal }),
+      firstname: firstName,
+      lastname: lastName,
+      email: email,
+      phone: phoneNumber,
+      program_session: time,
+      program_time_2: time2,
+      program_time_3: time3,
+      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
+      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
+      intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
+      zip: postal,
     };
+    
   
     console.log("📩 Contact Properties to Send:", contactProperties);
   
