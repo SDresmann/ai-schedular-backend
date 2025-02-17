@@ -258,26 +258,28 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
 
     let hubspotResponse;
 
+    const contactProperties = {
+      ...(firstName && { firstname: firstName }),
+      ...(lastName && { lastname: lastName }),
+      ...(email && { email: email }),
+      ...(phoneNumber && { phone: phoneNumber }),
+      ...(time && { program_session: time }),
+      ...(time2 && { program_time_2: time2 }),
+      ...(time3 && { program_time_3: time3 }),
+      ...(classDate && { intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').toISOString() }),
+      ...(classDate2 && { intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').toISOString() }),
+      ...(classDate3 && { intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').toISOString() }),
+      ...(postal && { zip: postal }),
+    };
+  
+    console.log("📩 Contact Properties to Send:", contactProperties);
+  
     if (contactId) {
-      console.log("🔄 Updating contact in HubSpot...");
+      console.log("🔄 Updating existing contact in HubSpot...");
   
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
-        {
-          properties: {
-            firstname: firstName || "",
-            lastname: lastName || "",
-            email: email || "",
-            phone: phoneNumber || "",
-            program_session: time || "",
-            program_time_2: time2 || "",
-            program_time_3: time3 || "",
-            intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
-            intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
-            intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
-            zip: postal || "",
-          },
-        },
+        { properties: contactProperties },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -287,27 +289,12 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       );
   
       console.log("✅ HubSpot Contact Updated Successfully:", hubspotResponse.data);
-  
     } else {
-      console.log("🆕 Creating new contact in HubSpot...");
+      console.log("🆕 Creating a new contact in HubSpot...");
   
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
-        {
-          properties: {
-            firstname: firstName || "",
-            lastname: lastName || "",
-            email: email || "",
-            phone: phoneNumber || "",
-            program_session: time || "",
-            program_time_2: time2 || "",
-            program_time_3: time3 || "",
-            intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
-            intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
-            intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').toISOString(),
-            zip: postal || "",
-          },
-        },
+        { properties: contactProperties },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -316,7 +303,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
         }
       );
   
-      console.log("✅ Contact Created in HubSpot:", hubspotResponse.data);
+      console.log("✅ New Contact Created in HubSpot:", hubspotResponse.data);
     }
   
     return res.status(200).json({
