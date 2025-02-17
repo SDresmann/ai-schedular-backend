@@ -82,28 +82,37 @@ async function getValidAccessToken() {
   console.log('Access token is still valid:', token.accessToken);
   return token.accessToken;
 }
-
-// Helper: Verify reCAPTCHA Token
-async function verifyRecaptcha(token) {
+// ✅ Function to Refresh Access Token
+async function refreshAccessToken() {
   try {
+    console.log("🔄 Refreshing HubSpot Access Token...");
+
+    const token = await Token.findOne();
+    if (!token) throw new Error("No token found in database");
+
     const response = await axios.post(
-      'https://www.google.com/recaptcha/api/siteverify',
+      TOKEN_URL,
       new URLSearchParams({
-        secret: RECAPTCHA_SECRET_KEY,
-        response: token,
-      })
+        grant_type: "refresh_token",
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: token.refreshToken,
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
 
-    const { success } = response.data;
-    console.log('reCAPTCHA response:', response.data);
-    return success;
+    token.accessToken = response.data.access_token;
+    token.refreshToken = response.data.refresh_token || token.refreshToken;
+    token.expiresAt = Date.now() + response.data.expires_in * 1000;
+    await token.save();
+
+    console.log("✅ Token refreshed successfully:", token.accessToken);
+    return token.accessToken;
   } catch (error) {
-    console.error('Error verifying reCAPTCHA:', error.response?.data || error.message);
-    return false;
+    console.error("❌ Error refreshing access token:", error.response?.data || error.message);
+    throw new Error("Failed to refresh access token.");
   }
 }
-
-// Helper: Get Contact ID by Email
 async function getContactIdByEmail(email, accessToken) {
   try {
     const response = await axios.post(
@@ -143,6 +152,28 @@ async function getContactIdByEmail(email, accessToken) {
     throw error;
   }
 }
+// Helper: Verify reCAPTCHA Token
+async function verifyRecaptcha(token) {
+  try {
+    const response = await axios.post(
+      'https://www.google.com/recaptcha/api/siteverify',
+      new URLSearchParams({
+        secret: RECAPTCHA_SECRET_KEY,
+        response: token,
+      })
+    );
+
+    const { success } = response.data;
+    console.log('reCAPTCHA response:', response.data);
+    return success;
+  } catch (error) {
+    console.error('Error verifying reCAPTCHA:', error.response?.data || error.message);
+    return false;
+  }
+}
+
+// Helper: Get Contact ID by Email
+
 
 
 async function getUpdatedContact(contactId, accessToken) {
