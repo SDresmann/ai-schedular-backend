@@ -218,35 +218,19 @@ app.get('/auth/callback', async (req, res) => {
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   console.log('🚀 Incoming request body:', req.body);
-  const {
-    firstName,
-    lastName,
-    email,
-    phoneNumber,
-    time,
-    time2,
-    time3,
-    classDate,
-    classDate2,
-    classDate3,
-    postal,
-    recaptchaToken,
-  } = req.body;
+  const { firstName, lastName, email, phoneNumber, time, time2, time3, classDate, classDate2, classDate3, postal, recaptchaToken } = req.body;
 
   try {
-    // Verify reCAPTCHA token
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
-    if (!recaptchaValid) {
-      console.error('❌ Invalid reCAPTCHA token');
-      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
-    }
-    console.log('✅ reCAPTCHA validation passed.');
+    if (!recaptchaValid) return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
 
-    // Prepare contact data
+    const accessToken = await getValidAccessToken();
+    const contactId = await getContactIdByEmail(email, accessToken);
+
     const contactData = {
       firstname: firstName,
       lastname: lastName,
-      email: email,
+      email,
       phone: phoneNumber,
       program_session: time,
       program_time_2: time2,
@@ -256,75 +240,25 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
       zip: postal,
     };
-    
-    
-    console.log("Final Contact Data:", contactData);
-    
-    try {
-      const hubspotResponse = await axios.patch(
-        `${HUBSPOT_API_URL}/${contactId}`,
-        { properties: contactData }, // Ensure this is wrapped in "properties"
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      console.log("HubSpot PATCH Response:", hubspotResponse.data);
-    } catch (error) {
-      console.error("Error in PATCH request:", error.response?.data || error.message);
-    }
-    // Obtain access token
-    const accessToken = await getValidAccessToken();
-
-    // Get contact ID
-    const contactId = await getContactIdByEmail(email, accessToken);
 
     let hubspotResponse;
     if (contactId) {
-      // Update contact if exists
-      console.log('🔄 Updating contact in HubSpot...');
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
         { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
       );
-      console.log('✅ Contact updated in HubSpot:', hubspotResponse.data);
-
-      // Fetch updated contact data
-      await getUpdatedContact(contactId, accessToken);
     } else {
-      // Create new contact if it doesn't exist
-      console.log('🆕 Creating new contact in HubSpot...');
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
         { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
       );
-      console.log('✅ Contact created in HubSpot:', hubspotResponse.data);
-
-      // Fetch newly created contact data
-      await getUpdatedContact(hubspotResponse.data.id, accessToken);
     }
-
     res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
     console.error('❌ Error processing contact:', error.response?.data || error.message);
-    res.status(500).send({
-      message: 'Error processing contact data',
-      error: error.response?.data || error.message,
-    });
+    res.status(500).send({ message: 'Error processing contact data', error: error.response?.data || error.message });
   }
 });
 
