@@ -48,38 +48,23 @@ mongoose.connection.once('open', () => console.log('MongoDB connected successful
 
 // Function to Get Valid Access Token
 async function getValidAccessToken() {
+  console.log("🔍 Checking for stored access token...");
+
   const token = await Token.findOne();
-  if (!token) throw new Error('No tokens found in the database');
-
-  if (Date.now() > token.expiresAt) {
-    console.log('Access token expired, refreshing...');
-
-    try {
-      const response = await axios.post(
-        TOKEN_URL,
-        new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-          refresh_token: token.refreshToken,
-        }),
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-      );
-
-      token.accessToken = response.data.access_token;
-      token.refreshToken = response.data.refresh_token || token.refreshToken;
-      token.expiresAt = Date.now() + response.data.expires_in * 1000;
-      await token.save();
-
-      console.log('Access token refreshed successfully:', token.accessToken);
-      return token.accessToken;
-    } catch (error) {
-      console.error('Error refreshing access token:', error.response?.data || error.message);
-      throw new Error('Failed to refresh access token');
-    }
+  if (!token) {
+    console.error("❌ No token found in database");
+    throw new Error("No tokens found in the database");
   }
 
-  console.log('Access token is still valid:', token.accessToken);
+  console.log("📅 Token Expiry Time:", new Date(token.expiresAt));
+  console.log("⏰ Current Time:", new Date());
+
+  if (Date.now() > token.expiresAt) {
+    console.log("🔄 Access token expired, refreshing...");
+    return await refreshAccessToken(); // ✅ Refresh and return the new token
+  }
+
+  console.log("✅ Access token is still valid:", token.accessToken);
   return token.accessToken;
 }
 // ✅ Function to Refresh Access Token
