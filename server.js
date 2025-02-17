@@ -117,7 +117,25 @@ async function getContactIdByEmail(email, accessToken) {
     throw error;
   }
 }
+async function verifyRecaptcha(token) {
+  try {
+    const response = await axios.post(
+      'https://www.google.com/recaptcha/api/siteverify',
+      new URLSearchParams({
+        secret: RECAPTCHA_SECRET_KEY,  // Ensure this is set in your .env file
+        response: token,
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
 
+    const { success } = response.data;
+    console.log('🛡️ reCAPTCHA verification response:', response.data);
+    return success; // Returns true if valid, false otherwise
+  } catch (error) {
+    console.error('❌ Error verifying reCAPTCHA:', error.response?.data || error.message);
+    return false; // Fail-safe return
+  }
+}
 // **Route: Handle OAuth Callback**
 app.get('/auth/callback', async (req, res) => {
   const authorizationCode = req.query.code;
@@ -158,61 +176,49 @@ app.get('/auth/callback', async (req, res) => {
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   console.log('🚀 Incoming request body:', req.body);
-  
-  const { firstName, lastName, email, phoneNumber, time, time2, time3, classDate, classDate2, classDate3, postal, recaptchaToken } = req.body;
+
+  const {
+    firstName,
+    lastName,
+    email,
+    phoneNumber,
+    time,
+    time2,
+    time3,
+    classDate,
+    classDate2,
+    classDate3,
+    postal,
+    recaptchaToken,  // Make sure this is included in the request
+  } = req.body;
 
   try {
-    // Verify reCAPTCHA token
+    // ✅ Check reCAPTCHA Token
+    if (!recaptchaToken) {
+      console.error('❌ Missing reCAPTCHA token in request.');
+      return res.status(400).json({ error: 'MISSING_RECAPTCHA', message: 'reCAPTCHA token is required' });
+    }
+
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
     if (!recaptchaValid) {
       console.error('❌ Invalid reCAPTCHA token');
-      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+      return res.status(400).json({ error: 'INVALID_RECAPTCHA', message: 'reCAPTCHA validation failed' });
     }
+
     console.log('✅ reCAPTCHA validation passed.');
 
-    // Prepare contact data
-    const contactData = {
-      firstname: firstName,
-      lastname: lastName,
-      email: email,
-      phone: phoneNumber,
-      program_session: time,
-      program_time_2: time2,
-      program_time_3: time3,
-      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
-      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
-      intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
-      zip: postal,
-    };
-
-    console.log("Final Contact Data:", contactData);
-
-    // Get valid access token
-    const accessToken = await getValidAccessToken();
-
-    // Get contact ID
-    const contactId = await getContactIdByEmail(email, accessToken);
-    
-    if (!contactId) {
-      console.error("❌ contactId is undefined. Cannot update HubSpot.");
-      return res.status(400).send({ message: "No contact found in HubSpot" });
-    }
-
-    // Update contact in HubSpot
-    const hubspotResponse = await axios.patch(
-      `${HUBSPOT_API_URL}/${contactId}`,
-      { properties: contactData },
-      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
-    );
-
-    console.log("✅ Contact updated in HubSpot:", hubspotResponse.data);
-    res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
+    // Proceed with contact update in HubSpot...
+    // Add the rest of your code here
 
   } catch (error) {
-    console.error("❌ Error processing contact:", error.response?.data || error.message);
-    res.status(500).send({ message: "Error processing contact data", error: error.response?.data || error.message });
+    console.error('❌ Error processing contact:', error);
+    res.status(500).json({
+      message: 'Error processing contact data',
+      error: error.message || 'Internal Server Error',
+    });
   }
 });
+
 
 
 
