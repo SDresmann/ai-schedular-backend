@@ -10,7 +10,6 @@ require('dotenv').config();
 const Token = require('./models/token.models');
 
 const app = express();
-app.use(bodyParser.json());
 
 const corsOptions = {
   origin: ['http://localhost:3000', 'https://app.kableacademy.com'], // Add both local and production origins
@@ -19,6 +18,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
 };
 
+app.use(bodyParser.json());
 app.use(cors(corsOptions));
 
 // Environment Variables
