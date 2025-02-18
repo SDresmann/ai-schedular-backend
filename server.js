@@ -218,31 +218,33 @@ app.get('/auth/callback', async (req, res) => {
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   console.log('🚀 Incoming request body:', req.body);
-  const { 
-    firstName, 
-    lastName, 
-    email, 
-    phoneNumber, 
-    time, 
-    time2, 
-    time3, 
-    classDate, 
-    classDate2, 
-    classDate3, 
-    postal, 
-    recaptchaToken 
-  } = req.body;
 
   try {
-    const recaptchaValid = await verifyRecaptcha(recaptchaToken);
+    // Assuming verifyRecaptcha and getValidAccessToken are defined elsewhere
+    const recaptchaValid = await verifyRecaptcha(req.body.recaptchaToken);
     if (!recaptchaValid) return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
 
-    const accessToken = await getValidAccessToken();
+    const accessToken = await getValidAccessToken(); 
+
+    // 1. Extract values from req.body 
+    const { 
+      firstName, 
+      lastName, 
+      email, 
+      phoneNumber, 
+      time, 
+      time2, 
+      time3, 
+      classDate, 
+      classDate2, 
+      classDate3, 
+      postal 
+    } = req.body;
+
+    // Get contactId - Make sure this function is working correctly
     const contactId = await getContactIdByEmail(email, accessToken);
 
-    // 1. Extract values from req.body FIRST (you've already done this!)
-
-    // 2. THEN create the contactProperties object 
+    // 2. Create the contactProperties object 
     const contactProperties = {
       firstname: firstName || null,
       lastname: lastName || null,
@@ -257,12 +259,13 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       zip: postal || null
     };
 
-    // 3. NOW log the contactProperties 
+    // 3. Log the contactProperties 
     console.log("📩 Contact Properties to Send:", contactProperties);
 
     let hubspotResponse;
 
-    if (contactId !== null) {
+    if (contactId !== null) { 
+      // Contact exists, update it
       console.log("🔄 Updating existing contact in HubSpot...");
 
       hubspotResponse = await axios.patch(
@@ -278,10 +281,11 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
 
       console.log("✅ HubSpot Contact Updated Successfully:", hubspotResponse.data);
     } else {
+      // Contact doesn't exist, create a new one
       console.log("🆕 Creating a new contact in HubSpot...");
 
       hubspotResponse = await axios.post(
-        HUBSPOT_API_URL,
+        HUBSPOT_API_URL, 
         { properties: contactProperties },
         {
           headers: {
@@ -293,20 +297,21 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
 
       console.log("✅ New Contact Created in HubSpot:", hubspotResponse.data);
     }
-  
+
     return res.status(200).json({
       message: contactId ? "Contact updated successfully in HubSpot!" : "New contact created successfully!",
-      hubspotResponse: hubspotResponse.data,
+      hubspotResponse: hubspotResponse.data, 
     });
 
   } catch (error) {
     console.error("❌ Error processing contact:", error.response?.data || error.message);
     return res.status(500).json({
       message: "Error processing contact data",
-      error: error.response?.data || error.message,
+      error: error.response?.data || error.message, 
     });
   }
 });
+
 
 
 // Start Server
