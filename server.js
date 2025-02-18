@@ -10,6 +10,7 @@ require('dotenv').config();
 const Token = require('./models/token.models');
 
 const app = express();
+app.use(express.json())
 app.use(bodyParser.json());
 const allowedOrigins = ['https://app.kableacademy.com', 'http://localhost:3000'];
 const corsOptions = {
