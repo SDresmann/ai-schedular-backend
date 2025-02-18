@@ -8,23 +8,18 @@ const cors = require('cors');
 require('dotenv').config();
 
 const Token = require('./models/token.models');
+
+const app = express();
 app.use(bodyParser.json());
 
-const allowedOrigins = ['https://your-frontend-domain.com', 'http://localhost:3000']; // Update if needed 
-
 const corsOptions = {
-    origin: (origin, callback) => {
-        if (allowedOrigins.includes(origin) || !origin) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    // ... other options
+  origin: ['http://localhost:3000', 'https://app.kableacademy.com'], // Add both local and production origins
+  credentials: true, // If you need to send cookies or authentication headers
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'], // Allowed HTTP methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
 };
 
-app.use(cors(corsOptions)); 
-
+app.use(cors(corsOptions));
 
 // Environment Variables
 const CLIENT_ID = process.env.CLIENT_ID;
