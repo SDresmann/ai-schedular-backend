@@ -10,28 +10,16 @@ require('dotenv').config();
 const Token = require('./models/token.models');
 
 const app = express();
-app.use(express.json())
-app.use(bodyParser.json());
-const allowedOrigins = ['https://app.kableacademy.com', 'http://localhost:3000'];
+
 const corsOptions = {
-  origin: (origin, callback) => {
-    if (allowedOrigins.includes(origin) || !origin) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
+  origin: ['http://localhost:3000', 'https://app.kableacademy.com'], // Add both local and production origins
+  credentials: true, // If you need to send cookies or authentication headers
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'], // Allowed HTTP methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Headers to allow
 };
 
-
 app.use(cors(corsOptions));
-axios.interceptors.request.use((config) => {
-  console.log(`Making request to ${config.url}`);
-  return config;
-});
+app.use(bodyParser.json());
 
 // Environment Variables
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -45,7 +33,6 @@ const RECAPTCHA_SECRET_KEY = process.env.SECRET_KEY;
 // MongoDB Connection
 mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlParser: true });
 mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
-
 
 // Function to Get Valid Access Token
 async function getValidAccessToken() {
@@ -131,147 +118,51 @@ async function getContactIdByEmail(email, accessToken) {
       }
     );
 
-    console.log('HubSpot Search Response:', response.data); // Log full response
-
     if (response.data.results.length === 0) {
-      console.error('No contact found for email:', email);
       return null;
     }
 
-    return response.data.results[0].id; // Ensure this returns a valid ID
+    return response.data.results[0].id;
   } catch (error) {
     console.error('Error fetching contact ID:', error.response?.data || error.message);
     throw error;
   }
 }
 
-
-async function getUpdatedContact(contactId, accessToken) {
-  console.log("🔍 Payload sent to HubSpot:", JSON.stringify({ properties: contactData }, null, 2));
-
-  try {
-    const response = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        params: {
-          properties: ['program_session', 'program_time_2', 'program_time_3', 'intro_to_ai_program_date'],
-        },
-      }
-    );
-    console.log('🚀 Retrieved Contact Data:', response.data.properties);
-  } catch (error) {
-    console.error('❌ Error Retrieving Updated Contact:', error.response?.data || error.message);
-  }
-}
-
-app.get('/auth', (req, res) => {
-  const authUrl = `${AUTHORIZATION_URL}?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=crm.objects.contacts.read%20crm.objects.contacts.write&response_type=code`;
-  console.log('Redirecting to HubSpot Authorization URL:', authUrl);
-  res.redirect(authUrl);
-});
-// Route: Handle OAuth Callback
-app.get('/auth/callback', async (req, res) => {
-  const authorizationCode = req.query.code;
-
-  if (!authorizationCode) {
-    return res.status(400).send({ message: 'Authorization code missing' });
-  }
-
-  try {
-    const tokenResponse = await axios.post(
-      TOKEN_URL,
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        redirect_uri: REDIRECT_URI,
-        code: authorizationCode,
-      }),
-      {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      }
-    );
-
-    const { access_token, refresh_token, expires_in } = tokenResponse.data;
-
-    // Save tokens to the database
-    const token = await Token.findOneAndUpdate(
-      {},
-      {
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        expiresAt: Date.now() + expires_in * 1000,
-      },
-      { upsert: true, new: true }
-    );
-
-    console.log('Tokens saved to database:', token);
-    res.status(200).send({ message: 'Authorization successful!' });
-  } catch (error) {
-    console.error('Error exchanging authorization code:', error.response?.data || error.message);
-    res.status(500).send({ message: 'Error exchanging authorization code' });
-  }
-});
-
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  console.log('🚀 Incoming request body:', req.body);
+  const { firstName, lastName, email, phoneNumber, time, classDate, postal, recaptchaToken } = req.body;
+  console.log('Received Request Body:', req.body);
 
   try {
-    // Assuming verifyRecaptcha and getValidAccessToken are defined elsewhere
-    const recaptchaValid = await verifyRecaptcha(req.body.recaptchaToken);
-    if (!recaptchaValid) return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+    // Verify reCAPTCHA token
+    const recaptchaValid = await verifyRecaptcha(recaptchaToken);
+    if (!recaptchaValid) {
+      console.error('Invalid reCAPTCHA token');
+      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+    }
+    console.log('reCAPTCHA validation passed.');
 
-    const accessToken = await getValidAccessToken(); 
-
-    // 1. Extract values from req.body 
-    const { 
-      firstName, 
-      lastName, 
-      email, 
-      phoneNumber, 
-      time, 
-      time2, 
-      time3, 
-      classDate, 
-      classDate2, 
-      classDate3, 
-      postal 
-    } = req.body;
-
-    // Get contactId - Make sure this function is working correctly
-    const contactId = await getContactIdByEmail(email, accessToken);
-
-    // 2. Create the contactProperties object 
-    const contactProperties = {
-      firstname: firstName || null,
-      lastname: lastName || null,
-      email: email || null,
-      phone: phoneNumber || null,
-      program_session: time || null,
-      program_time_2: time2 || null,
-      program_time_3: time3 || null,
-      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
-      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
-      intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').utc().startOf('day').valueOf() || null,
-      zip: postal || null
+    // Prepare contact data
+    const contactData = {
+      firstname: firstName,
+      lastname: lastName,
+      email,
+      phone: phoneNumber,
+      program_session: time,
+      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
+      zip: postal,
     };
 
-    // 3. Log the contactProperties 
-    console.log("📩 Contact Properties to Send:", contactProperties);
+    // Obtain access token and handle contact creation/updating
+    const accessToken = await getValidAccessToken();
+    const contactId = await getContactIdByEmail(email, accessToken);
 
     let hubspotResponse;
-
-    if (contactId !== null) { 
-      // Contact exists, update it
-      console.log("🔄 Updating existing contact in HubSpot...");
-
+    if (contactId) {
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
-        { properties: contactProperties },
+        { properties: contactData },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -279,42 +170,28 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
           },
         }
       );
-
-      console.log("✅ HubSpot Contact Updated Successfully:", hubspotResponse.data);
     } else {
-      // Contact doesn't exist, create a new one
-      console.log("🆕 Creating a new contact in HubSpot...");
-
       hubspotResponse = await axios.post(
-        HUBSPOT_API_URL, 
-        { properties: contactProperties },
+        HUBSPOT_API_URL,
+        { properties: contactData },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         }
       );
-
-      console.log("✅ New Contact Created in HubSpot:", hubspotResponse.data);
     }
 
-    return res.status(200).json({
-      message: contactId ? "Contact updated successfully in HubSpot!" : "New contact created successfully!",
-      hubspotResponse: hubspotResponse.data, 
-    });
-
+    res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
-    console.error("❌ Error processing contact:", error.response?.data || error.message);
-    return res.status(500).json({
-      message: "Error processing contact data",
-      error: error.response?.data || error.message, 
+    console.error('Error processing form submission:', error.response?.data || error.message);
+    res.status(500).send({
+      message: 'Error processing contact data',
+      error: error.response?.data || error.message,
     });
   }
 });
-
-
-
 
 // Start Server
 const PORT = process.env.PORT || 5000;
