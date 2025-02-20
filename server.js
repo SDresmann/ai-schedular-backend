@@ -150,7 +150,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       email,
       phone: phoneNumber,
       program_session: time,
-      program_time_2, time2,
+      program_time_3, time2,
       intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
       intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
       zip: postal,
