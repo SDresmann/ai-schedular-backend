@@ -131,7 +131,7 @@ async function getContactIdByEmail(email, accessToken) {
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  const { firstName, lastName, email, phoneNumber, time, classDate, postal, recaptchaToken } = req.body;
+  const { firstName, lastName, email, phoneNumber, time, time2, classDate, classDate2, postal, recaptchaToken } = req.body;
   console.log('Received Request Body:', req.body);
 
   try {
@@ -150,7 +150,9 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       email,
       phone: phoneNumber,
       program_session: time,
+      program_time_2, time2,
       intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
+      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').utc().startOf('day').valueOf(),
       zip: postal,
     };
 
