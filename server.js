@@ -188,7 +188,14 @@ async function getFullyBookedDates() {
     return [];
   }
 }
-
+app.get('/api/booked-dates', async (req, res) => {
+  try {
+    const fullyBookedDates = await getFullyBookedDates();
+    res.status(200).json(fullyBookedDates);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching booked dates', error: error.message });
+  }
+});
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   const { firstName, lastName, email, phoneNumber, time, time2, classDate, classDate2, recaptchaToken } = req.body;
