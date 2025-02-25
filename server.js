@@ -129,6 +129,66 @@ async function getContactIdByEmail(email, accessToken) {
   }
 }
 
+async function getFullyBookedDates() {
+  try {
+    const accessToken = await getValidAccessToken();
+    const results = [];
+    let hasMore = true;
+    let after;
+
+    // Paginate through contacts – adjust the limit as needed.
+    while (hasMore) {
+      const response = await axios.post(
+        `${HUBSPOT_API_URL}/search`,
+        {
+          limit: 100,
+          after: after,
+          properties: ['intro_to_ai_program_date', 'intro_to_ai_date_2'],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = response.data;
+      results.push(...data.results);
+      if (data.paging && data.paging.next && data.paging.next.after) {
+        after = data.paging.next.after;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    // Use sets to track booked dates for each time slot.
+    const firstSlotDates = new Set();
+    const secondSlotDates = new Set();
+
+    results.forEach(contact => {
+      const props = contact.properties;
+      if (props.intro_to_ai_program_date) {
+        // Convert timestamp (assumed as milliseconds) to MM/DD/YYYY format.
+        const dateStr = moment(Number(props.intro_to_ai_program_date)).format('MM/DD/YYYY');
+        firstSlotDates.add(dateStr);
+      }
+      if (props.intro_to_ai_date_2) {
+        const dateStr = moment(Number(props.intro_to_ai_date_2)).format('MM/DD/YYYY');
+        secondSlotDates.add(dateStr);
+      }
+    });
+
+    // A date is fully booked if it's booked in both time slots.
+    const fullyBooked = [...firstSlotDates].filter(date => secondSlotDates.has(date));
+    console.log('Fully booked dates:', fullyBooked);
+    return fullyBooked;
+  } catch (error) {
+    console.error('Error fetching fully booked dates:', error.response?.data || error.message);
+    return [];
+  }
+}
+
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   const { firstName, lastName, email, phoneNumber, time, time2, classDate, classDate2, recaptchaToken } = req.body;
