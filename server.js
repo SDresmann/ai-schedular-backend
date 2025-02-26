@@ -8,6 +8,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const Token = require('./models/token.models');
+const Booking = require('./models/booking.models');
 
 const app = express();
 
@@ -190,12 +191,29 @@ async function getFullyBookedDates() {
 }
 app.get('/api/booked-dates', async (req, res) => {
   try {
-    const fullyBookedDates = await getFullyBookedDates();
+    // Group bookings by date and count distinct time slots booked for each date.
+    const bookings = await Booking.aggregate([
+      {
+        $group: {
+          _id: '$date',
+          timeSlots: { $addToSet: '$timeSlot' },
+        },
+      },
+      {
+        $match: {
+          timeSlots: { $size: 2 }, // both time slots are booked
+        },
+      },
+    ]);
+
+    const fullyBookedDates = bookings.map(booking => booking._id);
     res.status(200).json(fullyBookedDates);
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching booked dates', error: error.message });
+    console.error('Error fetching booked dates:', error);
+    res.status(500).json({ message: 'Error fetching booked dates' });
   }
 });
+
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   const { firstName, lastName, email, phoneNumber, time, time2, classDate, classDate2, recaptchaToken } = req.body;
@@ -250,7 +268,8 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
         }
       );
     }
-
+    await Booking.create({ email, date: classDate, timeSlot: time });
+  await Booking.create({ email, date: classDate2, timeSlot: time2 });
     res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
     console.error('Error processing form submission:', error.response?.data || error.message);
