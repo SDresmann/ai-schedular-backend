@@ -216,7 +216,7 @@ app.get('/api/booked-dates', async (req, res) => {
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  const { firstName, lastName, email, phoneNumber, time, time2, classDate, classDate2, recaptchaToken } = req.body;
+  const { firstName, lastName, email, company, phoneNumber, time, time2, classDate, classDate2, recaptchaToken } = req.body;
   console.log('Received Request Body:', req.body);
 
   try {
@@ -233,6 +233,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       firstname: firstName,
       lastname: lastName,
       email,
+      company,
       phone: phoneNumber,
       program_session: time,
       program_time_2: time2,
@@ -269,7 +270,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       );
     }
     await Booking.create({ email, date: classDate, timeSlot: time });
-  await Booking.create({ email, date: classDate2, timeSlot: time2 });
+    await Booking.create({ email, date: classDate2, timeSlot: time2 });
     res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
     console.error('Error processing form submission:', error.response?.data || error.message);
