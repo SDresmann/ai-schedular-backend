@@ -210,26 +210,26 @@ app.post('/api/check-availability', async (req, res) => {
 
 app.get('/api/booked-dates', async (req, res) => {
   try {
-    // Group bookings by date and count distinct time slots booked for each date.
-    const bookings = await Booking.aggregate([
-      {
-        $group: {
-          _id: '$date',
-          timeSlots: { $addToSet: '$timeSlot' },
-        },
-      },
-      {
-        $match: {
-          timeSlots: { $size: 2 }, // both time slots are booked
-        },
-      },
-    ]);
+      // Fetch all bookings and group by date
+      const bookings = await Booking.aggregate([
+          {
+              $group: {
+                  _id: "$date", // Group by date
+                  bookedTimes: { $addToSet: "$timeSlot" } // Collect all booked time slots for each date
+              }
+          }
+      ]);
 
-    const fullyBookedDates = bookings.map(booking => booking._id);
-    res.status(200).json(fullyBookedDates);
+      // Format response to easily look up booked times
+      const bookedDatesMap = {};
+      bookings.forEach(booking => {
+          bookedDatesMap[booking._id] = booking.bookedTimes;
+      });
+
+      res.status(200).json(bookedDatesMap);
   } catch (error) {
-    console.error('Error fetching booked dates:', error);
-    res.status(500).json({ message: 'Error fetching booked dates' });
+      console.error("Error fetching booked dates:", error);
+      res.status(500).json({ message: "Error fetching booked dates", error: error.message });
   }
 });
 
