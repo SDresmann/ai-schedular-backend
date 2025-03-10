@@ -190,23 +190,28 @@ async function getFullyBookedDates() {
   }
 }
 // ✅ Check if the selected class date & time are available
-app.post('/api/check-availability', async (req, res) => {
+app.post("/api/check-availability", async (req, res) => {
   const { classDate, time } = req.body;
 
   try {
-      // Look for an existing booking with the same date & time
       const existingBooking = await Booking.findOne({ date: classDate, timeSlot: time });
 
       if (existingBooking) {
-          return res.json({ available: false }); // ❌ Date & time already booked
+          return res.json({ 
+              available: false, 
+              date: classDate, 
+              time: time,
+              message: `❌ Date **${classDate}** and Time **${time}** are already booked.`
+          });
       }
 
-      res.json({ available: true }); // ✅ Available
+      res.json({ available: true });
   } catch (error) {
-      console.error("Error checking availability:", error);
+      console.error("❌ Error checking availability:", error);
       res.status(500).json({ available: false, error: "Server error" });
   }
 });
+
 
 app.get('/api/booked-dates', async (req, res) => {
   try {
