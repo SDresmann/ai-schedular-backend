@@ -215,28 +215,27 @@ app.post("/api/check-availability", async (req, res) => {
 
 app.get('/api/booked-dates', async (req, res) => {
   try {
-      // Fetch all bookings and group by date
       const bookings = await Booking.aggregate([
           {
               $group: {
-                  _id: "$date", // Group by date
-                  bookedTimes: { $addToSet: "$timeSlot" } // Collect all booked time slots for each date
-              }
-          }
+                  _id: "$date",
+                  timeSlots: { $addToSet: "$timeSlot" }, // Get all booked times per date
+              },
+          },
       ]);
 
-      // Format response to easily look up booked times
-      const bookedDatesMap = {};
-      bookings.forEach(booking => {
-          bookedDatesMap[booking._id] = booking.bookedTimes;
+      const fullyBookedDates = {};
+      bookings.forEach((booking) => {
+          fullyBookedDates[booking._id] = booking.timeSlots; // Store booked times per date
       });
 
-      res.status(200).json(bookedDatesMap);
+      res.status(200).json(fullyBookedDates);
   } catch (error) {
       console.error("Error fetching booked dates:", error);
-      res.status(500).json({ message: "Error fetching booked dates", error: error.message });
+      res.status(500).json({ message: "Error fetching booked dates" });
   }
 });
+
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
