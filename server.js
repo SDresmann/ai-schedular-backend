@@ -254,7 +254,7 @@ app.get('/api/booked-dates', async (req, res) => {
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
-  const { firstName, lastName, email, company, phoneNumber, time, time2, classDate, classDate2, recaptchaToken } = req.body;
+  const { firstName, lastName, email, your_company_name, phoneNumber, time, time2, classDate, classDate2, recaptchaToken } = req.body;
   console.log('Received Request Body:', req.body);
 
   try {
@@ -271,7 +271,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       firstname: firstName,
       lastname: lastName,
       email,
-      company,
+      company:your_company_name,
       phone: phoneNumber,
       program_session: time,
       program_time_2: time2,
