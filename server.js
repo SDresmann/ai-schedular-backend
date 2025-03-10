@@ -215,25 +215,38 @@ app.post("/api/check-availability", async (req, res) => {
 
 app.get('/api/booked-dates', async (req, res) => {
   try {
-    const bookings = await Booking.aggregate([
-      {
-        $group: {
-          _id: "$date",
-          timeSlots: { $addToSet: "$timeSlot" },
-        },
-      },
-      {
-        $match: {
-          timeSlots: { $size: 2 }, // Only return fully booked dates
-        },
-      },
-    ]);
+      const bookings = await Booking.aggregate([
+          {
+              $group: {
+                  _id: "$date",
+                  timeSlots: { $addToSet: "$timeSlot" } // Get all booked times per date
+              }
+          }
+      ]);
 
-    const fullyBookedDates = bookings.map(booking => booking._id);
-    res.status(200).json(fullyBookedDates);
+      const fullyBookedDates = {};
+
+      bookings.forEach((booking) => {
+          const date = booking._id;
+          const bookedTimes = booking.timeSlots;
+
+          const isFriday = moment(date, "MM/DD/YYYY").isoWeekday() === 5;
+          let requiredSlots = isFriday ? 3 : 2; // ✅ Fridays have 3 slots, other days have 2
+
+          // Store the booked times for this date
+          fullyBookedDates[date] = bookedTimes;
+
+          // ✅ Mark a date as fully booked if all its slots are taken
+          if (bookedTimes.length >= requiredSlots) {
+              fullyBookedDates[date] = bookedTimes; // Store it as fully booked
+          }
+      });
+
+      console.log("📌 Fully booked dates sent to frontend:", fullyBookedDates);
+      res.status(200).json(fullyBookedDates);
   } catch (error) {
-    console.error("Error fetching booked dates:", error);
-    res.status(500).json({ message: "Error fetching booked dates" });
+      console.error("❌ Error fetching booked dates:", error);
+      res.status(500).json({ message: "Error fetching booked dates" });
   }
 });
 
