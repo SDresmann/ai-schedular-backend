@@ -271,7 +271,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       firstname: firstName,
       lastname: lastName,
       email,
-      company: your_company_name,
+      yourcompany: your_company_name,
       phone: phoneNumber,
       program_session: time,
       program_time_2: time2,
