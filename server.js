@@ -311,6 +311,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     }
     await Booking.create({ email, date: classDate, timeSlot: time });
     await Booking.create({ email, date: classDate2, timeSlot: time2 });
+    await Booking.create({ email, date: classDate3, timeSlot: time3 });
     res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
   } catch (error) {
     console.error('Error processing form submission:', error.response?.data || error.message);
