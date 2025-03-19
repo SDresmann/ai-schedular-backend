@@ -194,58 +194,58 @@ app.post("/api/check-availability", async (req, res) => {
   const { classDate, time } = req.body;
 
   try {
-      const existingBooking = await Booking.findOne({ date: classDate, timeSlot: time });
+    const existingBooking = await Booking.findOne({ date: classDate, timeSlot: time });
 
-      if (existingBooking) {
-          return res.json({ 
-              available: false, 
-              date: classDate, 
-              time: time,
-              message: `❌ Date **${classDate}** and Time **${time}** are already booked.`
-          });
-      }
+    if (existingBooking) {
+      return res.json({
+        available: false,
+        date: classDate,
+        time: time,
+        message: `❌ Date **${classDate}** and Time **${time}** are already booked.`
+      });
+    }
 
-      res.json({ available: true });
+    res.json({ available: true });
   } catch (error) {
-      console.error("❌ Error checking availability:", error);
-      res.status(500).json({ available: false, error: "Server error" });
+    console.error("❌ Error checking availability:", error);
+    res.status(500).json({ available: false, error: "Server error" });
   }
 });
 
 
 app.get('/api/booked-dates', async (req, res) => {
   try {
-      const bookings = await Booking.aggregate([
-          {
-              $group: {
-                  _id: "$date",
-                  timeSlots: { $addToSet: "$timeSlot" } // Get all booked times per date
-              }
-          }
-      ]);
+    const bookings = await Booking.aggregate([
+      {
+        $group: {
+          _id: "$date",
+          timeSlots: { $addToSet: "$timeSlot" } // Get all booked times per date
+        }
+      }
+    ]);
 
-      const fullyBookedDates = {};
+    const fullyBookedDates = {};
 
-      bookings.forEach((booking) => {
-          const date = moment(booking._id).format("MM/DD/YYYY"); // ✅ Convert date format
-          const bookedTimes = booking.timeSlots;
+    bookings.forEach((booking) => {
+      const date = moment(booking._id).format("MM/DD/YYYY"); // ✅ Convert date format
+      const bookedTimes = booking.timeSlots;
 
-          const isFriday = moment(date, "MM/DD/YYYY").isoWeekday() === 5;
-          let requiredSlots = isFriday ? 3 : 2; // ✅ Fridays have 3 slots, other days have 2
+      const isFriday = moment(date, "MM/DD/YYYY").isoWeekday() === 5;
+      let requiredSlots = isFriday ? 3 : 2; // ✅ Fridays have 3 slots, other days have 2
 
-          fullyBookedDates[date] = bookedTimes;
+      fullyBookedDates[date] = bookedTimes;
 
-          // ✅ Mark a date as fully booked if all slots are taken
-          if (bookedTimes.length >= requiredSlots) {
-              fullyBookedDates[date] = bookedTimes;
-          }
-      });
+      // ✅ Mark a date as fully booked if all slots are taken
+      if (bookedTimes.length >= requiredSlots) {
+        fullyBookedDates[date] = bookedTimes;
+      }
+    });
 
-      console.log("📌 Sending cleaned booked dates:", fullyBookedDates);
-      res.status(200).json(fullyBookedDates); // ✅ Send formatted dates
+    console.log("📌 Sending cleaned booked dates:", fullyBookedDates);
+    res.status(200).json(fullyBookedDates); // ✅ Send formatted dates
   } catch (error) {
-      console.error("❌ Error fetching booked dates:", error);
-      res.status(500).json({ message: "Error fetching booked dates" });
+    console.error("❌ Error fetching booked dates:", error);
+    res.status(500).json({ message: "Error fetching booked dates" });
   }
 });
 
@@ -277,9 +277,10 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       program_session: time,
       program_time_2: time2,
       program_time_3: time3,
-      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').format('YYYY-MM-DD'),
-      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').format('YYYY-MM-DD'),
-      intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').format('YYYY-MM-DD'),
+      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').valueOf(),
+      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').valueOf(),
+      intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').valueOf(),
+
     };
 
     // Obtain access token and handle contact creation/updating
