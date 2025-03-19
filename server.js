@@ -255,19 +255,34 @@ app.get('/api/booked-dates', async (req, res) => {
 
 // Route: Handle Form Submission
 app.post('/api/intro-to-ai-payment', async (req, res) => {
+  console.log('📥 Received Request Body:', req.body); // ✅ Log incoming data
+
   const { firstName, lastName, email, yourCompany, phoneNumber, time, time2, time3, classDate, classDate2, classDate3, recaptchaToken } = req.body;
-  console.log('Received Request Body:', req.body);
 
   try {
-    // Verify reCAPTCHA token
+    // ✅ Verify reCAPTCHA
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
     if (!recaptchaValid) {
-      console.error('Invalid reCAPTCHA token');
+      console.error('❌ Invalid reCAPTCHA token');
       return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
     }
-    console.log('reCAPTCHA validation passed.');
+    console.log('✅ reCAPTCHA validation passed.');
 
-    // Prepare contact data
+    // ✅ Convert Dates for HubSpot
+    const formattedHubSpotDate1 = moment(classDate, 'YYYY-MM-DD').valueOf();
+    const formattedHubSpotDate2 = moment(classDate2, 'YYYY-MM-DD').valueOf();
+    const formattedHubSpotDate3 = moment(classDate3, 'YYYY-MM-DD').valueOf();
+
+    console.log('📌 HubSpot Formatted Dates:', formattedHubSpotDate1, formattedHubSpotDate2, formattedHubSpotDate3);
+
+    // ✅ Convert Dates for MongoDB (Ensure MM/DD/YYYY format)
+    const formattedMongoDate1 = moment(classDate).format('MM/DD/YYYY');
+    const formattedMongoDate2 = moment(classDate2).format('MM/DD/YYYY');
+    const formattedMongoDate3 = moment(classDate3).format('MM/DD/YYYY');
+
+    console.log('📌 MongoDB Formatted Dates:', formattedMongoDate1, formattedMongoDate2, formattedMongoDate3);
+
+    // ✅ Prepare Contact Data for HubSpot
     const contactData = {
       firstname: firstName,
       lastname: lastName,
@@ -277,13 +292,12 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       program_session: time,
       program_time_2: time2,
       program_time_3: time3,
-      intro_to_ai_program_date: moment(classDate, 'MM/DD/YYYY').valueOf(),
-      intro_to_ai_date_2: moment(classDate2, 'MM/DD/YYYY').valueOf(),
-      intro_to_ai_date_3: moment(classDate3, 'MM/DD/YYYY').valueOf(),
-
+      intro_to_ai_program_date: formattedHubSpotDate1 || null,
+      intro_to_ai_date_2: formattedHubSpotDate2 || null,
+      intro_to_ai_date_3: formattedHubSpotDate3 || null,
     };
 
-    // Obtain access token and handle contact creation/updating
+    // ✅ Get Access Token & Update or Create Contact
     const accessToken = await getValidAccessToken();
     const contactId = await getContactIdByEmail(email, accessToken);
 
@@ -292,37 +306,34 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
         { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
       );
     } else {
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
         { properties: contactData },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
       );
     }
-    await Booking.create({ email, date: classDate, timeSlot: time });
-    await Booking.create({ email, date: classDate2, timeSlot: time2 });
-    await Booking.create({ email, date: classDate3, timeSlot: time3 });
-    res.status(200).send({ message: 'Contact successfully processed', data: hubspotResponse.data });
+
+    // ✅ Save to MongoDB Only If Dates Exist
+    if (formattedMongoDate1 && time) {
+      await Booking.create({ email, date: formattedMongoDate1, timeSlot: time });
+    }
+    if (formattedMongoDate2 && time2) {
+      await Booking.create({ email, date: formattedMongoDate2, timeSlot: time2 });
+    }
+    if (formattedMongoDate3 && time3) {
+      await Booking.create({ email, date: formattedMongoDate3, timeSlot: time3 });
+    }
+
+    res.status(200).send({ message: '✅ Contact successfully processed in HubSpot and MongoDB!', data: hubspotResponse.data });
   } catch (error) {
-    console.error('Error processing form submission:', error.response?.data || error.message);
-    res.status(500).send({
-      message: 'Error processing contact data',
-      error: error.response?.data || error.message,
-    });
+    console.error('❌ Error processing form submission:', error.response?.data || error.message);
+    res.status(500).send({ message: 'Error processing contact data', error: error.response?.data || error.message });
   }
 });
+
 
 // Start Server
 const PORT = process.env.PORT || 5000;
