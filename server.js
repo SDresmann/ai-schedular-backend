@@ -227,28 +227,28 @@ app.get('/api/booked-dates', async (req, res) => {
       const fullyBookedDates = {};
 
       bookings.forEach((booking) => {
-          const date = booking._id;
+          const date = moment(booking._id).format("MM/DD/YYYY"); // ✅ Convert date format
           const bookedTimes = booking.timeSlots;
 
           const isFriday = moment(date, "MM/DD/YYYY").isoWeekday() === 5;
           let requiredSlots = isFriday ? 3 : 2; // ✅ Fridays have 3 slots, other days have 2
 
-          // Store the booked times for this date
           fullyBookedDates[date] = bookedTimes;
 
-          // ✅ Mark a date as fully booked if all its slots are taken
+          // ✅ Mark a date as fully booked if all slots are taken
           if (bookedTimes.length >= requiredSlots) {
-              fullyBookedDates[date] = bookedTimes; // Store it as fully booked
+              fullyBookedDates[date] = bookedTimes;
           }
       });
 
-      console.log("📌 Fully booked dates sent to frontend:", fullyBookedDates);
-      res.status(200).json(fullyBookedDates);
+      console.log("📌 Sending cleaned booked dates:", fullyBookedDates);
+      res.status(200).json(fullyBookedDates); // ✅ Send formatted dates
   } catch (error) {
       console.error("❌ Error fetching booked dates:", error);
       res.status(500).json({ message: "Error fetching booked dates" });
   }
 });
+
 
 
 
