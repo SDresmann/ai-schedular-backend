@@ -1,9 +1,23 @@
-const mongoose = require('mongoose')
+// backend/models/booking.models.js
+import mongoose from 'mongoose';
 
 const bookingSchema = new mongoose.Schema({
-    email: { type: String, required: true },
-    date: { type: String, required: true},
-    timeSlot: { type: String, required: true},
-}, {timestamps:true})
+  email: {
+    type: String,
+    required: true,
+  },
+  date: {
+    // stored as "MM/DD/YYYY"
+    type: String,
+    required: true,
+  },
+  timeSlot: {
+    // e.g. "9am-12pm EST/8am-11pm CST"
+    type: String,
+    required: true,
+  },
+}, { timestamps: true });
 
-module.exports = mongoose.model('Booking', bookingSchema)
+const Booking = mongoose.model('Booking', bookingSchema);
+
+export default Booking;
