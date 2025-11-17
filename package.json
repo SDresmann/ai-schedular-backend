@@ -2,6 +2,7 @@
   "name": "react-ai-scheduler",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@azure/msal-node": "^3.8.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
