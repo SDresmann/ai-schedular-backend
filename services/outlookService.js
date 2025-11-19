@@ -1,7 +1,11 @@
 // backend/services/outlookService.js
 import 'isomorphic-fetch';
+import dotenv from 'dotenv';
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { Client } from '@microsoft/microsoft-graph-client';
+
+// Load env for this module (expects backend/.env)
+dotenv.config();
 
 // ------------------------------------------------------
 // Environment variables
@@ -37,17 +41,31 @@ if (!MS_OUTLOOK_USER_EMAIL) {
 // ------------------------------------------------------
 // MSAL Confidential Client (client credentials flow)
 // ------------------------------------------------------
-const msalConfig = {
-  auth: {
-    clientId: MS_CLIENT_ID,
-    authority: `https://login.microsoftonline.com/${MS_TENANT_ID}`,
-    clientSecret: MS_CLIENT_SECRET,
-  },
-};
+let cca = null;
 
-const cca = new ConfidentialClientApplication(msalConfig);
+if (MS_CLIENT_ID && MS_CLIENT_SECRET && MS_TENANT_ID) {
+  const msalConfig = {
+    auth: {
+      clientId: MS_CLIENT_ID,
+      authority: `https://login.microsoftonline.com/${MS_TENANT_ID}`,
+      clientSecret: MS_CLIENT_SECRET,
+    },
+  };
+
+  cca = new ConfidentialClientApplication(msalConfig);
+} else {
+  console.warn(
+    '⚠️ [OutlookService] MSAL client NOT initialized because credentials are missing.'
+  );
+}
 
 async function getGraphClient() {
+  if (!cca) {
+    throw new Error(
+      'MSAL client not configured (missing MS_CLIENT_ID / MS_CLIENT_SECRET / MS_TENANT_ID)'
+    );
+  }
+
   console.log('🔑 [OutlookService] Acquiring Graph token via client credentials...');
 
   const tokenResponse = await cca.acquireTokenByClientCredential({
@@ -123,6 +141,13 @@ export async function createOutlookEvent({
     return null;
   }
 
+  if (!MS_CLIENT_ID || !MS_CLIENT_SECRET || !MS_TENANT_ID) {
+    console.warn(
+      '⚠️ [createOutlookEvent] MSAL credentials are missing. Skipping event creation.'
+    );
+    return null;
+  }
+
   if (!dateISO || !timeLabel) {
     console.warn('⚠️ [createOutlookEvent] Missing dateISO or timeLabel. Skipping.');
     return null;
@@ -151,7 +176,7 @@ export async function createOutlookEvent({
     client = await getGraphClient();
   } catch (err) {
     console.error('❌ [createOutlookEvent] Could not get Graph client:', err.message || err);
-    throw err;
+    return null; // Don’t crash whole server
   }
 
   const subject = `Intro to AI Class - ${company || 'Kable Academy'}`;
@@ -212,6 +237,6 @@ export async function createOutlookEvent({
       '❌ [createOutlookEvent] Error from Microsoft Graph:',
       err.response?.data || err.message || err
     );
-    throw err;
+    return null;
   }
 }

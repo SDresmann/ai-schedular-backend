@@ -79,8 +79,13 @@ console.log('[Microsoft ENV bound in server.js]', {
 // ---------------------------------------------------------
 // MongoDB
 // ---------------------------------------------------------
-mongoose.connect(process.env.ATLAS_URI, { useUnifiedTopology: true, useNewUrlParser: true });
-mongoose.connection.once('open', () => console.log('MongoDB connected successfully'));
+mongoose.connect(process.env.ATLAS_URI, {
+  useUnifiedTopology: true,
+  useNewUrlParser: true,
+});
+mongoose.connection.once('open', () =>
+  console.log('MongoDB connected successfully')
+);
 
 // ---------------------------------------------------------
 // Helpers
@@ -109,7 +114,10 @@ async function getValidAccessToken() {
 
       return token.accessToken;
     } catch (error) {
-      console.error('Error refreshing access token:', error.response?.data || error.message);
+      console.error(
+        'Error refreshing access token:',
+        error.response?.data || error.message
+      );
       throw new Error('Failed to refresh access token');
     }
   }
@@ -125,7 +133,10 @@ async function verifyRecaptcha(token) {
     );
     return !!response.data.success;
   } catch (error) {
-    console.error('Error verifying reCAPTCHA:', error.response?.data || error.message);
+    console.error(
+      'Error verifying reCAPTCHA:',
+      error.response?.data || error.message
+    );
     return false;
   }
 }
@@ -135,18 +146,36 @@ async function getContactIdByEmail(email, accessToken) {
     const response = await axios.post(
       'https://api.hubapi.com/crm/v3/objects/contacts/search',
       {
-        filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: email }] }],
+        filterGroups: [
+          {
+            filters: [{ propertyName: 'email', operator: 'EQ', value: email }],
+          },
+        ],
         properties: ['email'],
       },
-      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
     );
 
     return response.data.results.length ? response.data.results[0].id : null;
   } catch (error) {
-    console.error('Error fetching contact ID:', error.response?.data || error.message);
+    console.error(
+      'Error fetching contact ID:',
+      error.response?.data || error.message
+    );
     throw error;
   }
 }
+
+// simple ping
+app.get('/api/ping', (_req, res) => {
+  console.log('🔔 /api/ping hit');
+  res.json({ ok: true });
+});
 
 // ---------------------------------------------------------
 // Availability
@@ -154,7 +183,10 @@ async function getContactIdByEmail(email, accessToken) {
 app.post('/api/check-availability', async (req, res) => {
   const { classDate, time } = req.body;
   try {
-    const existingBooking = await Booking.findOne({ date: classDate, timeSlot: time });
+    const existingBooking = await Booking.findOne({
+      date: classDate,
+      timeSlot: time,
+    });
     if (existingBooking) {
       return res.json({
         available: false,
@@ -196,7 +228,13 @@ app.get('/api/booked-dates', async (_req, res) => {
 // ---------------------------------------------------------
 // Outlook event helper (non-blocking)
 // ---------------------------------------------------------
-async function maybeCreateOutlookEvent({ company, studentName, studentEmail, dateISO, timeLabel }) {
+async function maybeCreateOutlookEvent({
+  company,
+  studentName,
+  studentEmail,
+  dateISO,
+  timeLabel,
+}) {
   console.log('🟢 [maybeCreateOutlookEvent] Invoked');
   console.log('   ├── Company:       ', company || '(none)');
   console.log('   ├── Student Name:  ', studentName || '(none)');
@@ -205,66 +243,120 @@ async function maybeCreateOutlookEvent({ company, studentName, studentEmail, dat
   console.log('   └── Time Label:    ', timeLabel || '(missing)');
 
   if (!dateISO || !timeLabel) {
-    console.log('⚠️  [maybeCreateOutlookEvent] Missing required fields — skipping creation.');
+    console.log(
+      '⚠️  [maybeCreateOutlookEvent] Missing required fields — skipping creation.'
+    );
     return;
   }
 
   try {
-    console.log('⏳ [maybeCreateOutlookEvent] Attempting to create Outlook event...');
-    const evt = await createOutlookEvent({ company, studentName, studentEmail, dateISO, timeLabel });
+    console.log(
+      '⏳ [maybeCreateOutlookEvent] Attempting to create Outlook event...'
+    );
+    const evt = await createOutlookEvent({
+      company,
+      studentName,
+      studentEmail,
+      dateISO,
+      timeLabel,
+    });
 
-    // Log a trimmed-down view if available
     if (evt) {
       console.log('✅ [maybeCreateOutlookEvent] Outlook event successfully created:');
       console.log('   ├── ID:       ', evt.id || '(none)');
       console.log('   ├── Subject:  ', evt.subject || '(none)');
       console.log('   ├── Start:    ', evt.start?.dateTime || evt.start || '(none)');
       console.log('   ├── End:      ', evt.end?.dateTime || evt.end || '(none)');
-      console.log('   └── Location: ', evt.location?.displayName || '(none)');
+      console.log(
+        '   └── Location: ',
+        evt.location?.displayName || '(none)'
+      );
     } else {
-      console.log('⚠️  [maybeCreateOutlookEvent] No event object returned from createOutlookEvent()');
+      console.log(
+        '⚠️  [maybeCreateOutlookEvent] No event object returned from createOutlookEvent()'
+      );
     }
 
     return evt;
   } catch (e) {
     console.error('❌ [maybeCreateOutlookEvent] Failed to create Outlook event.');
     if (e.response?.data) {
-      console.error('   ↳ Graph API error payload:', JSON.stringify(e.response.data, null, 2));
+      console.error(
+        '   ↳ Graph API error payload:',
+        JSON.stringify(e.response.data, null, 2)
+      );
     } else {
       console.error('   ↳ Message:', e.message || e);
     }
   }
 }
 
-
 // ---------------------------------------------------------
 // Form Submission
 // ---------------------------------------------------------
 app.post('/api/intro-to-ai-payment', async (req, res) => {
   const {
-    firstName, lastName, email, yourCompany, phoneNumber,
-    time, time2, time3,
-    classDate, classDate2, classDate3,
+    firstName,
+    lastName,
+    email,
+    yourCompany,
+    phoneNumber,
+    time,
+    time2,
+    time3,
+    classDate,
+    classDate2,
+    classDate3,
     recaptchaToken,
   } = req.body;
 
   console.log('📥 Received Request Body:', {
-    firstName, lastName, email, yourCompany,
-    time, time2, time3, classDate, classDate2, classDate3,
+    firstName,
+    lastName,
+    email,
+    yourCompany,
+    time,
+    time2,
+    time3,
+    classDate,
+    classDate2,
+    classDate3,
   });
 
   try {
     const recaptchaValid = await verifyRecaptcha(recaptchaToken);
-    if (!recaptchaValid) return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+    if (!recaptchaValid) {
+      return res.status(400).send({ message: 'Invalid reCAPTCHA token' });
+    }
     console.log('✅ reCAPTCHA validation passed.');
 
-    const hub1 = classDate  ? moment(classDate,  'YYYY-MM-DD').valueOf() : null;
-    const hub2 = classDate2 ? moment(classDate2, 'YYYY-MM-DD').valueOf() : null;
-    const hub3 = classDate3 ? moment(classDate3, 'YYYY-MM-DD').valueOf() : null;
+    // ⚠️ FIXED: HubSpot requires midnight UTC timestamps
+    const hub1 = classDate
+      ? moment.utc(classDate, 'YYYY-MM-DD').startOf('day').valueOf()
+      : null;
+    const hub2 = classDate2
+      ? moment.utc(classDate2, 'YYYY-MM-DD').startOf('day').valueOf()
+      : null;
+    const hub3 = classDate3
+      ? moment.utc(classDate3, 'YYYY-MM-DD').startOf('day').valueOf()
+      : null;
 
-    const mongo1 = classDate  ? moment(classDate).format('MM/DD/YYYY')  : null;
-    const mongo2 = classDate2 ? moment(classDate2).format('MM/DD/YYYY') : null;
-    const mongo3 = classDate3 ? moment(classDate3).format('MM/DD/YYYY') : null;
+    console.log('📌 HubSpot Formatted Dates (UTC ms):', hub1, hub2, hub3);
+    console.log('📌 HubSpot Dates ISO:', {
+      hub1: hub1 ? moment.utc(hub1).toISOString() : null,
+      hub2: hub2 ? moment.utc(hub2).toISOString() : null,
+      hub3: hub3 ? moment.utc(hub3).toISOString() : null,
+    });
+
+    const mongo1 = classDate
+      ? moment(classDate).format('MM/DD/YYYY')
+      : null;
+    const mongo2 = classDate2
+      ? moment(classDate2).format('MM/DD/YYYY')
+      : null;
+    const mongo3 = classDate3
+      ? moment(classDate3).format('MM/DD/YYYY')
+      : null;
 
     const contactData = {
       firstname: firstName,
@@ -289,35 +381,74 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       hubspotResponse = await axios.patch(
         `${HUBSPOT_API_URL}/${contactId}`,
         { properties: contactData },
-        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
       );
     } else {
       hubspotResponse = await axios.post(
         HUBSPOT_API_URL,
         { properties: contactData },
-        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
       );
     }
     console.log('✅ HubSpot upsert OK:', hubspotResponse?.status);
 
     // Save bookings
-    if (mongo1 && time)  await Booking.create({ email, date: mongo1, timeSlot: time });
-    if (mongo2 && time2) await Booking.create({ email, date: mongo2, timeSlot: time2 });
-    if (mongo3 && time3) await Booking.create({ email, date: mongo3, timeSlot: time3 });
+    if (mongo1 && time)
+      await Booking.create({ email, date: mongo1, timeSlot: time });
+    if (mongo2 && time2)
+      await Booking.create({ email, date: mongo2, timeSlot: time2 });
+    if (mongo3 && time3)
+      await Booking.create({ email, date: mongo3, timeSlot: time3 });
     console.log('✅ Saved bookings to MongoDB');
 
     // Create Outlook events
     const studentName = `${firstName ?? ''} ${lastName ?? ''}`.trim();
     await Promise.all([
-      maybeCreateOutlookEvent({ company: yourCompany, studentName, studentEmail: email, dateISO: classDate,  timeLabel: time }),
-      maybeCreateOutlookEvent({ company: yourCompany, studentName, studentEmail: email, dateISO: classDate2, timeLabel: time2 }),
-      maybeCreateOutlookEvent({ company: yourCompany, studentName, studentEmail: email, dateISO: classDate3, timeLabel: time3 }),
+      maybeCreateOutlookEvent({
+        company: yourCompany,
+        studentName,
+        studentEmail: email,
+        dateISO: classDate,
+        timeLabel: time,
+      }),
+      maybeCreateOutlookEvent({
+        company: yourCompany,
+        studentName,
+        studentEmail: email,
+        dateISO: classDate2,
+        timeLabel: time2,
+      }),
+      maybeCreateOutlookEvent({
+        company: yourCompany,
+        studentName,
+        studentEmail: email,
+        dateISO: classDate3,
+        timeLabel: time3,
+      }),
     ]);
 
-    res.status(200).send({ message: '✅ Contact processed in HubSpot & MongoDB!' });
+    res
+      .status(200)
+      .send({ message: '✅ Contact processed in HubSpot & MongoDB!' });
   } catch (error) {
-    console.error('❌ Error processing form submission:', error.response?.data || error.message);
-    res.status(500).send({ message: 'Error processing contact data', error: error.response?.data || error.message });
+    console.error(
+      '❌ Error processing form submission:',
+      error.response?.data || error.message
+    );
+    res.status(500).send({
+      message: 'Error processing contact data',
+      error: error.response?.data || error.message,
+    });
   }
 });
 
@@ -329,28 +460,43 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
 app.post('/api/test-outlook', async (req, res) => {
   try {
     const { dateISO, timeLabel, company, email } = req.body || {};
-    console.log('[/api/test-outlook] Incoming:', { dateISO, timeLabel, company, email });
+    console.log('[/api/test-outlook] Incoming:', {
+      dateISO,
+      timeLabel,
+      company,
+      email,
+    });
 
     if (!dateISO || !timeLabel) {
-      return res.status(400).json({ ok: false, error: 'dateISO and timeLabel are required' });
+      return res
+        .status(400)
+        .json({ ok: false, error: 'dateISO and timeLabel are required' });
     }
 
     const studentName = ''; // optional
     const data = await createOutlookEvent({
       company: company || 'Test Company',
       studentName,
-      studentEmail: email || '',   // leave empty to avoid invites
-      dateISO,                     // "YYYY-MM-DD"
-      timeLabel,                   // one of the three labels
+      studentEmail: email || '', // leave empty to avoid invites
+      dateISO, // "YYYY-MM-DD"
+      timeLabel, // one of the three labels
     });
 
     console.log('[/api/test-outlook] ✅ Created:', {
-      id: data.id, subject: data.subject, start: data.start, end: data.end
+      id: data.id,
+      subject: data.subject,
+      start: data.start,
+      end: data.end,
     });
     return res.json({ ok: true, event: data });
   } catch (e) {
-    console.error('[/api/test-outlook] ❌ Failed:', e?.response?.data || e.message);
-    return res.status(500).json({ ok: false, error: e?.response?.data || e.message });
+    console.error(
+      '[/api/test-outlook] ❌ Failed:',
+      e?.response?.data || e.message
+    );
+    return res
+      .status(500)
+      .json({ ok: false, error: e?.response?.data || e.message });
   }
 });
 
