@@ -28,6 +28,7 @@ console.log('[Microsoft ENV check]', {
   MS_CLIENT_SECRET: process.env.MS_CLIENT_SECRET ? 'OK' : 'MISSING',
   MS_TENANT_ID: process.env.MS_TENANT_ID ? 'OK' : 'MISSING',
   MS_REDIRECT_URI: process.env.MS_REDIRECT_URI ? 'OK' : 'MISSING',
+  MS_OUTLOOK_USER_EMAIL: process.env.MS_OUTLOOK_USER_EMAIL ? 'OK' : 'MISSING',
 });
 
 import microsoftRoutes from './routes/microsoftRoutes.js';
@@ -57,7 +58,8 @@ app.use(microsoftRoutes);
 // ---------------------------------------------------------
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5000/auth/callback';
+const REDIRECT_URI =
+  process.env.REDIRECT_URI || 'http://localhost:5000/auth/callback';
 const TOKEN_URL = 'https://api.hubapi.com/oauth/v1/token';
 const HUBSPOT_API_URL = 'https://api.hubapi.com/crm/v3/objects/contacts';
 const RECAPTCHA_SECRET_KEY = process.env.SECRET_KEY;
@@ -68,7 +70,6 @@ const MS_CLIENT_SECRET = process.env.MS_CLIENT_SECRET;
 const MS_TENANT_ID = process.env.MS_TENANT_ID;
 const MS_REDIRECT_URI = process.env.MS_REDIRECT_URI;
 
-// (Optional) Log again right where they’re declared for clarity
 console.log('[Microsoft ENV bound in server.js]', {
   MS_CLIENT_ID: MS_CLIENT_ID ? 'OK' : 'MISSING',
   MS_CLIENT_SECRET: MS_CLIENT_SECRET ? 'OK' : 'MISSING',
@@ -213,7 +214,8 @@ app.get('/api/booked-dates', async (_req, res) => {
 
     const byDate = {};
     bookings.forEach((b) => {
-      const date = moment(b._id).format('MM/DD/YYYY');
+      // b._id is stored as "MM/DD/YYYY" in Mongo; keep that format
+      const date = moment(b._id, 'MM/DD/YYYY').format('MM/DD/YYYY');
       byDate[date] = b.timeSlots;
     });
 
@@ -227,6 +229,7 @@ app.get('/api/booked-dates', async (_req, res) => {
 
 // ---------------------------------------------------------
 // Outlook event helper (non-blocking)
+// (Actual subject/body "TechCred" logic is in outlookService.js)
 // ---------------------------------------------------------
 async function maybeCreateOutlookEvent({
   company,
@@ -330,7 +333,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     }
     console.log('✅ reCAPTCHA validation passed.');
 
-    // ⚠️ FIXED: HubSpot requires midnight UTC timestamps
+    // HubSpot requires midnight UTC timestamps
     const hub1 = classDate
       ? moment.utc(classDate, 'YYYY-MM-DD').startOf('day').valueOf()
       : null;
@@ -348,15 +351,9 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       hub3: hub3 ? moment.utc(hub3).toISOString() : null,
     });
 
-    const mongo1 = classDate
-      ? moment(classDate).format('MM/DD/YYYY')
-      : null;
-    const mongo2 = classDate2
-      ? moment(classDate2).format('MM/DD/YYYY')
-      : null;
-    const mongo3 = classDate3
-      ? moment(classDate3).format('MM/DD/YYYY')
-      : null;
+    const mongo1 = classDate ? moment(classDate).format('MM/DD/YYYY') : null;
+    const mongo2 = classDate2 ? moment(classDate2).format('MM/DD/YYYY') : null;
+    const mongo3 = classDate3 ? moment(classDate3).format('MM/DD/YYYY') : null;
 
     const contactData = {
       firstname: firstName,
@@ -402,7 +399,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
     }
     console.log('✅ HubSpot upsert OK:', hubspotResponse?.status);
 
-    // Save bookings
+    // Save bookings (MM/DD/YYYY) for availability
     if (mongo1 && time)
       await Booking.create({ email, date: mongo1, timeSlot: time });
     if (mongo2 && time2)
@@ -411,7 +408,7 @@ app.post('/api/intro-to-ai-payment', async (req, res) => {
       await Booking.create({ email, date: mongo3, timeSlot: time3 });
     console.log('✅ Saved bookings to MongoDB');
 
-    // Create Outlook events
+    // Create Outlook events (subject/body handled in outlookService.js)
     const studentName = `${firstName ?? ''} ${lastName ?? ''}`.trim();
     await Promise.all([
       maybeCreateOutlookEvent({
